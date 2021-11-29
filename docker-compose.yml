@@ -1,0 +1,34 @@
+version: '3.8'
+services:
+
+  #Socket Service
+  socket-server:
+    build:
+      args:
+        user: test
+        uid: 1000
+      context: ./
+      dockerfile:  Dockerfile
+    container_name: socket-server
+    restart: unless-stopped
+    tty: true
+    ports:
+      - "8888:8888"
+    volumes:
+      - websocketdata:/usr/src/app
+    networks:
+      - app-network
+
+#Docker Networks
+networks:
+  app-network:
+    driver: bridge
+
+#Volumes
+volumes:
+  websocketdata:
+      driver: local
+      driver_opts:
+        type: none
+        o: bind
+        device: ./

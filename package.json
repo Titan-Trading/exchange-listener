@@ -9,6 +9,11 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
-    "nodemon": "^2.0.15"
+    "axios": "^0.24.0",
+    "crypto": "^1.0.1",
+    "dotenv": "^10.0.0",
+    "fs": "^0.0.1-security",
+    "nodemon": "^2.0.15",
+    "ws": "^8.2.3"
   }
 }
