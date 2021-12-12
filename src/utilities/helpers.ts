@@ -1,4 +1,4 @@
-const crypto = require('crypto');
+import crypto from 'crypto';
 
 
 /**
@@ -11,7 +11,7 @@ const crypto = require('crypto');
  * @param {string} baseTickerSymbol 
  * @param {string} targetTickerSymbol 
  */
-function getTickerSymbol(exchangeName, baseTickerSymbol, targetTickerSymbol) {
+export function getTickerSymbol(exchangeName, baseTickerSymbol, targetTickerSymbol) {
     switch(exchangeName) {
         case 'Binance':
             return targetTickerSymbol + baseTickerSymbol;
@@ -30,7 +30,7 @@ function getTickerSymbol(exchangeName, baseTickerSymbol, targetTickerSymbol) {
  * Get the USD symbol for the given exchange
  * @param {string} exchangeName 
  */
-function getUSDSymbol(exchangeName) {
+export function getUSDSymbol(exchangeName) {
     switch(exchangeName) {
         case 'Binance':
         case 'KuCoin':
@@ -46,7 +46,7 @@ function getUSDSymbol(exchangeName) {
  * Get default currency pairs for the given exchange
  * @param {string} exchangeName 
  */
-function getDefaultPairsByExchange(exchangeName) {
+export function getDefaultPairsByExchange(exchangeName) {
     let baseSymbols = [];
     let targetSymbols = [];
 
@@ -133,7 +133,7 @@ function getDefaultPairsByExchange(exchangeName) {
  * @param {decimal} value 
  * @param {Object} tickerRepo 
  */
-function convertPrice(exchangeName, srcSymbol, destSymbol, value, tickerRepo) {
+export function convertPrice(exchangeName, srcSymbol, destSymbol, value, tickerRepo) {
     if(srcSymbol === destSymbol) return value;
     let convertedPrice = getPrice(exchangeName, srcSymbol + destSymbol, tickerRepo);
     if(!convertedPrice) return null;
@@ -146,7 +146,7 @@ function convertPrice(exchangeName, srcSymbol, destSymbol, value, tickerRepo) {
  * @param {string} tickerSymbol 
  * @param {Object} tickerRepo 
  */
-function getPrice(exchangeName, tickerSymbol, tickerRepo) {
+export function getPrice(exchangeName, tickerSymbol, tickerRepo) {
     const price = tickerRepo.get(exchangeName, tickerSymbol);
     if(!price) return false;
 
@@ -162,7 +162,7 @@ function getPrice(exchangeName, tickerSymbol, tickerRepo) {
  * Generate random hash
  * @param {integer} length 
  */
-function getRandomHash(length) {
+export function getRandomHash(length) {
     let rand = Math.random().toString(36);
     rand += Math.random().toString(36);
     rand += Math.random().toString(36);
@@ -177,7 +177,7 @@ function getRandomHash(length) {
  * @param {string} key 
  * @param {string} message 
  */
-function encrypt(key, message) {
+export function encrypt(key, message) {
     const cipher = crypto.createCipheriv('aes-256-cbc', key, process.env.ENCRYPTION_IV);
     let encrypted = cipher.update(message, 'utf8', 'hex');
     encrypted += cipher.final('hex');
@@ -189,25 +189,9 @@ function encrypt(key, message) {
  * @param {string} key 
  * @param {string} message 
  */
-function decrypt(key, message) {
+export function decrypt(key, message) {
     const decipher = crypto.createDecipheriv('aes-256-cbc', key, process.env.ENCRYPTION_IV);
     let decrypted = decipher.update(message, 'hex', 'utf8');
     decrypted += decipher.final('utf8');
     return decrypted;
 }
-
-
-module.exports = {
-
-    // CURRENCY
-    getTickerSymbol,
-    getUSDSymbol,
-    getDefaultPairsByExchange,
-    convertPrice,
-    getPrice,
-
-    // CRYPTO
-    getRandomHash,
-    encrypt,
-    decrypt
-};
