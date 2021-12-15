@@ -1,0 +1,40 @@
+Steps to made a live or test trade
+
+UI
+- create or activate a bot session 
+REST API
+- add new bot session on an exchange using a given algorithm
+- notify the socket server through socket server REST API
+SOCKET SERVER
+- get notification that a new bot session has been activated or added
+- notify a worker (give worker the algorithm and it's options/config, exchange, exchange account, etc)
+WORKER
+- worker gets a new/activated bot session
+- worker listens for market updates from the exchange
+- worker passes updates to all activated bot sessions
+- algorithm looks for an entry
+- when one is found, algorithm uses exchange REST API to make an entry trade
+- algorithm looks for an exit
+- when one is found, algorithm uses exchange REST API to make an exit
+- process is repeated until bot session ends (either by some condition or worker gets notified that bot session has ended)
+
+
+Steps to made a backtest trade
+
+UI
+- create or activate a bot session with backtest details
+REST API
+- add new bot session on an exchange using a given algorithm
+- notify the socket server through socket server REST API
+SOCKET SERVER
+- get notification that a new bot session has been activated or added
+- notify a worker (give worker the algorithm, backtest details and it's options/config, exchange, exchange account, etc)
+WORKER
+- worker gets a new/activated backtest bot session
+- worker get backtest data from time series database
+- worker runs through backtest data and passes it to all algorithms
+- algorithm looks for an entry
+- when one is found, algorithm fakes an entry trade and keeps track of the details
+- algorithm looks for an exit
+- when one is found, algorithm fakes an exit trade and keeps track of the details
+- process is repeated until bot session ends (all backtest data is run through)
