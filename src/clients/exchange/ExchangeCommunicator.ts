@@ -62,7 +62,8 @@ export default class ExchangeCommunicator
                         console.log('Connected to KuCoin socket server!');
                     });
 
-                    const allSymbolTickerId = randomUUID();
+                    // const allSymbolTickerId = randomUUID();
+                    const BTCUSDTKlineId = randomUUID();
                     const pingId = randomUUID();
                     let pingTimer = null;
 
@@ -71,13 +72,22 @@ export default class ExchangeCommunicator
                         // once welcome message is received subscribe to different topics/channels
                         if(data.type === 'welcome') {
                             // subscribe to all symbol ticker
+                            // socket.sendMessage({
+                            //     id: allSymbolTickerId,                          
+                            //     type: 'subscribe',
+                            //     topic: '/market/ticker:all',
+                            //     response: true                             
+                            // });
+                            // console.log('Subscribe: ' + allSymbolTickerId);
+
+                            // subscribe to candle/kline
                             socket.sendMessage({
-                                id: allSymbolTickerId,                          
+                                id: BTCUSDTKlineId,
                                 type: 'subscribe',
-                                topic: '/market/ticker:all',
-                                response: true                             
+                                topic: '/market/candles:BTC-USDT_1min',
+                                response: true
                             });
-                            console.log('Subscribe: ' + allSymbolTickerId);
+                            console.log('Subscribe: ' + BTCUSDTKlineId);
 
                             // setup ping timer
                             setInterval(() => {
@@ -85,16 +95,18 @@ export default class ExchangeCommunicator
                                     id: pingId,                          
                                     type: 'ping'                        
                                 });
+
+                                // console.log('Ping: ' + pingId);
                             }, webSocketPingInterval);
-                            console.log('Ping: ' + pingId);
                         }
                         // acknowledge ping
                         else if(data.type === 'pong') {
-                            console.log('Pong: ' + pingId);
+                            // console.log('Pong: ' + pingId);
                         }
                         // acknowledge that a topic/channel was subscribed to
                         else if(data.type === 'ack') {
-                            console.log('Acknowledge: ' + allSymbolTickerId);
+                            // console.log('Acknowledge: ' + allSymbolTickerId);
+                            console.log('Acknowledge: ' + BTCUSDTKlineId);
                         }
                         // channel message
                         else if(data.type === 'message') {
@@ -102,6 +114,20 @@ export default class ExchangeCommunicator
                             if(data.topic === '/market/ticker:all') {
                                 if(typeof context._onTickerUpdate === 'function') {
                                     context._onTickerUpdate(exchange.name, data.subject, data.data);
+                                }
+                            }
+                            else if(data.subject && data.subject === 'trade.candles.update') {
+                                if(typeof context._onKlineUpdate === 'function') {
+                                    context._onKlineUpdate(exchange.name, '1m', data.data.symbol, {
+                                        startTimestamp: data.data.candles[0],
+                                        open: data.data.candles[1],
+                                        close: data.data.candles[2],
+                                        high: data.data.candles[3],
+                                        low: data.data.candles[4],
+                                        volume: data.data.candles[5],
+                                        total: data.data.candles[6],
+                                        timestamp: Math.trunc(data.data.time / 1000000)
+                                    });
                                 }
                             }
                         }

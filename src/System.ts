@@ -152,6 +152,23 @@ export default class System
         });
 
         this.exchangeCommunicator.onKlineUpdate((exchange, interval, symbol, data) => {
+            // store in time series database
+            const point = new Point('klines')
+                .tag('exchange', exchange)
+                .tag('symbol', symbol)
+                .tag('interval', interval)
+                .intField('startTimestamp', parseInt(data.startTimestamp))
+                .floatField('open', parseFloat(data.open))
+                .floatField('close', parseFloat(data.close))
+                .floatField('high', parseFloat(data.high))
+                .floatField('low', parseFloat(data.low))
+                .floatField('volume', parseFloat(data.volume))
+                .floatField('total', parseFloat(data.total))
+                .timestamp(new Date(data.timestamp));
+            
+            this.influxWrite.writePoint(point);
+
+            // console.log(exchange, interval, symbol, data);
             // notify web and mobile clients (web socket)
         });
 
