@@ -13,6 +13,9 @@
  */
 
 import { randomUUID } from "crypto";
+import ExchangeAccounts from "../../repositories/ExchangeAccounts";
+import Exchanges from "../../repositories/Exchanges";
+import Symbols from "../../repositories/Symbols";
 import WebSocketClient from "../../utilities/WebSocketClient";
 import KuCoinRestAPI from "./exchanges/KuCoin/RestAPI";
 
@@ -36,15 +39,18 @@ export default class ExchangeCommunicator
     /**
      * Start exchange connections
      */
-    start(settings: {exchanges: Array<any>, symbols: Array<any>, accounts: Array<any>}): void
+    start(repos: {exchanges: Exchanges, symbols: Symbols, accounts: ExchangeAccounts}): void
     {
         this._exchangeAPIs = {};
         this._exchangeSockets = {};
 
         const context = this;
 
+        const symbols = repos.symbols.get();
+        const accounts = repos.accounts.get();
+
         // loop through each exchange
-        settings.exchanges.map(async exchange => {
+        repos.exchanges.get().map(async exchange => {
             switch(exchange.name) {
                 case 'KuCoin':
                     this._exchangeAPIs['KuCoin'] = new KuCoinRestAPI('https://api.kucoin.com');
@@ -62,8 +68,45 @@ export default class ExchangeCommunicator
                         console.log('Connected to KuCoin socket server!');
                     });
 
-                    // const allSymbolTickerId = randomUUID();
-                    const BTCUSDTKlineId = randomUUID();
+                    let channels = {};
+                    let allSymbolsString = '';
+
+                    // loop through all exchange accounts for the exchange
+                    accounts.map((account, index) => {
+
+                    });
+
+                    // loop through all symbols for the exchange
+                    symbols.map((symbol, index) => {
+                        // klines
+                        const symbolKlinesId = randomUUID();
+                        channels[symbolKlinesId] = {
+                            config: {
+                                id: symbolKlinesId,
+                                type: 'subscribe',
+                                topic: '/market/candles:' + symbol.target_currency.name + '-' + symbol.base_currency.name + '_1min',
+                                response: true
+                            },
+                            symbol
+                        };
+
+                        // compile list of symbols (separated by comma)
+                        allSymbolsString += symbol.target_currency.name + '-' + symbol.base_currency.name;
+                        if(index < symbols.length - 1) {
+                            allSymbolsString += ',';
+                        }
+                    });
+
+                    // level 2 depth chart
+                    const level2DepthId = randomUUID();
+                    channels[level2DepthId] = {
+                        config: {
+                            id: level2DepthId,
+                            type: 'subscribe',
+                            topic: '/spotMarket/level2Depth50:' + allSymbolsString
+                        }
+                    };
+
                     const pingId = randomUUID();
                     let pingTimer = null;
 
@@ -80,14 +123,19 @@ export default class ExchangeCommunicator
                             // });
                             // console.log('Subscribe: ' + allSymbolTickerId);
 
+                            // subscribe to all symbol channels
                             // subscribe to candle/kline
-                            socket.sendMessage({
-                                id: BTCUSDTKlineId,
-                                type: 'subscribe',
-                                topic: '/market/candles:BTC-USDT_1min',
-                                response: true
-                            });
-                            console.log('Subscribe: ' + BTCUSDTKlineId);
+                            for(let channelId in channels) {
+                                const symbol = channels[channelId].symbol;
+                                if(typeof channels[channelId].symbol !== 'undefined') {
+                                    console.log('Subscribe channel: ' + symbol.target_currency.name + '-' + symbol.base_currency.name);
+                                }
+                                else {
+                                    console.log('Subscribe channel: ' + channelId);
+                                }
+
+                                socket.sendMessage(channels[channelId].config);
+                            }
 
                             // setup ping timer
                             setInterval(() => {
@@ -105,8 +153,15 @@ export default class ExchangeCommunicator
                         }
                         // acknowledge that a topic/channel was subscribed to
                         else if(data.type === 'ack') {
-                            // console.log('Acknowledge: ' + allSymbolTickerId);
-                            console.log('Acknowledge: ' + BTCUSDTKlineId);
+                            if(typeof channels[data.id] !== 'undefined') {
+                                if(typeof channels[data.id].symbol !== 'undefined') {
+                                    const symbol = channels[data.id].symbol;
+                                    console.log('Acknowledge channel: ' + symbol.target_currency.name + '-' + symbol.base_currency.name);
+                                }
+                                else {
+                                    console.log('Acknowledge channel: ' + data.id);
+                                }
+                            }
                         }
                         // channel message
                         else if(data.type === 'message') {
@@ -130,15 +185,32 @@ export default class ExchangeCommunicator
                                     });
                                 }
                             }
+                            else if(data.subject && data.subject === 'level2') {
+                                if(typeof context._onOrderBookUpdate === 'function') {
+                                    const symbol = data.topic.split(':')[1];
+                                    context._onOrderBookUpdate(exchange.name, symbol, data.data);
+                                }
+                            }
                         }
 
                     });
                 break;
             }
         });
-            // create a websocket client for each exchange
-            // subscribe to different channels based on each symbol
-            // subscribe to different channels based on each exchange account
+    }
+
+    /**
+     * Update exchange connections
+     */
+    update(repos: {exchanges: Exchanges, symbols: Symbols, accounts: ExchangeAccounts}): void
+    {
+        const context = this;
+
+        // stop the connections
+        this.stop();
+
+        // start the connections back up with new data
+        this.start(repos);
     }
 
     /**
@@ -146,7 +218,13 @@ export default class ExchangeCommunicator
      */
     stop(): void
     {
- 
+        // loop through each exchange and close the connection
+        for(let eSI in this._exchangeSockets) {
+            this._exchangeSockets[eSI].disconnect();
+        }
+        
+        this._exchangeAPIs = {};
+        this._exchangeSockets = {};
     }
 
     /**

@@ -41,6 +41,14 @@ export default class WebSocketClient
     }
 
     /**
+     * Close the connection
+     */
+    disconnect()
+    {
+        this.client.close();
+    }
+
+    /**
      * When a new client is connected
      * 
      * @param callback 

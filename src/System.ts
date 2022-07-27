@@ -1,10 +1,12 @@
 
 import RestAPI from './utilities/RestAPI';
-import HttpServer from './servers/HTTP';
-import TCPServer from './servers/TCP';
-import WebSocketServer from './servers/WebSocket';
 import ExchangeCommunicator from './clients/exchange/ExchangeCommunicator';
 import {InfluxDB, Point, HttpError} from '@influxdata/influxdb-client';
+import Exchanges from './repositories/Exchanges';
+import ExchangeAccounts from './repositories/ExchangeAccounts';
+import Symbols from './repositories/Symbols';
+import MessageBus from './MessageBus';
+import { randomUUID } from 'crypto';
 
 /**
  * System class that controls everything
@@ -12,128 +14,100 @@ import {InfluxDB, Point, HttpError} from '@influxdata/influxdb-client';
 
 export default class System
 {
+    messageBus: MessageBus;
     restAPI: RestAPI;
-    httpServer: HttpServer;
-    tcpServer: TCPServer;
-    webSocketServer: WebSocketServer;
     exchangeCommunicator: ExchangeCommunicator;
     influxWrite: any;
+
+    logData: string|boolean;
+
+    exchanges: Exchanges;
+    exchangeAccounts: ExchangeAccounts;
+    symbols: Symbols;
 
     constructor()
     {
         // load configurations
         const restAPIURL = process.env.REST_API_URL ? process.env.REST_API_URL : 'http://localhost:9000/api';
-        const httpPort = process.env.HTTP_PORT ? process.env.HTTP_PORT : '8889';
-        const tcpPort = process.env.TCP_PORT ? process.env.TCP_PORT : '8888';
-        const tcpHost = process.env.TCP_HOST ? process.env.TCP_HOST : 'localhost';
+        const restAPIKey = process.env.REST_API_KEY ? process.env.REST_API_KEY : '';
+        const restAPIKeySecret = process.env.REST_API_KEY_SECRET ? process.env.REST_API_KEY_SECRET : '';
+        this.logData = process.env.LOG_DATA ? process.env.LOG_DATA : false; 
+
+        // create message bus instance
+        this.messageBus = new MessageBus(process.env.CLIENT_ID, process.env.GROUP_ID, [process.env.KAFKA_BOOTSTRAP_SERVER]);
 
         // create REST API instance
-        this.restAPI = new RestAPI(restAPIURL);
-
-        // create HTTP server instance
-        this.httpServer = new HttpServer({
-            port: httpPort
-        });
-
-        // create TCP server instance
-        this.tcpServer = new TCPServer({
-            port: tcpPort,
-            host: tcpHost
-        });
-
-        // create WebSocket server instance
-        this.webSocketServer = new WebSocketServer({
-            httpServer: this.httpServer.getServer()
-        });
+        this.restAPI = new RestAPI(restAPIURL, restAPIKey, restAPIKeySecret);
 
         // create exchange communicator instance
         this.exchangeCommunicator = new ExchangeCommunicator();
 
         // create a write API, expecting point timestamps in nanoseconds (can be also 's', 'ms', 'us')
-        this.influxWrite = new InfluxDB({url: process.env.INFLUX_URL, token: process.env.INFLUX_TOKEN}).getWriteApi(process.env.INFLUX_ORG, process.env.INFLUX_BUCKET, 'ns')
+        this.influxWrite = new InfluxDB({
+            url:   process.env.INFLUX_URL,
+            token: process.env.INFLUX_TOKEN
+        }).getWriteApi(process.env.INFLUX_ORG, process.env.INFLUX_BUCKET, 'ns');
+        
+        // create repository instances
+        this.exchanges = Exchanges.getInstance();
+        this.exchangeAccounts = ExchangeAccounts.getInstance();
+        this.symbols = Symbols.getInstance();
     }
 
     /**
      * Start the system
      * 
      * - get all initialization data from rest API
-     * - start TCP server
-     * - start WebSocket server
+     * - start connection to message bus
      * - start client connections to all exchanges
      */
     async start(): Promise<void>
     {
-        // get all supported exchanges from api
-        const exchanges = await this.restAPI.getExchanges();
-
-        // get all watched symbols from api for all supported exchanges
-        const symbols = await this.restAPI.getTickerSymbols();
-
-        // get all exchange accounts (connected exchanges)
-        const accounts = await this.restAPI.getExchangeAccounts();
+        const context = this;
+        
+        /**
+         * Load initial data
+         */
+        await this.loadData();
 
         /**
-         * Http Server setup
+         * Setup message bus
+         * - listen for changes with exchanges, exchange accounts and exchange symbols and update exchange communicator
          */
-        // update clients (web and mobile, web socket) with trade statuses (from REST API)
-        // update trading workers (tcp socket) when new bot session or conditional trade is added or updated (from REST API)
-        // update trading workers (tcp socket) when a new algorithm (bot or conditional trade) is added or updated (from REST API)
-        this.httpServer.start();
-
-        /**
-         * TCP Server setup
-         */
-        this.tcpServer.onConnect(socket => {
-            console.log('new tcp client connected!');
+        this.messageBus.onMessage('exchanges', async (message) => {
+            console.log('exchange update', message);
+            await this.loadData();
         });
+
+        this.messageBus.onMessage('exchange-accounts', async (message) => {
+            console.log('exchange account update', message);
+            await this.loadData();
+        });
+
+        await this.messageBus.connect().then(async () => {
+            console.log('connected to message bus');
         
-        this.tcpServer.onDisconnect(socket => {
-            console.log('tcp client disconnected');
+            // let the service registry know that a new micro-service is online
+            await this.messageBus.sendEvent('service-registry', 'SERVICE_ONLINE', {
+                instanceId: process.env.INSTANCE_ID,
+                serviceId:  process.env.SERVICE_ID,
+                supportedCommunicationChannels: ['bus'],
+                hostname: 'exchange-listener',
+                port: 10000,
+                endpoints: [],
+                commands:  []
+            });
         });
-        
-        this.tcpServer.onError((socket, err) => {
-            console.log('tcp client error:', err);
-        });
-        
-        this.tcpServer.onMessage((socket, message) => {
-            console.log('tcp client', message);
-            // update socket server with trade statuses (from trader)
-        });
-        
-        // start a tcp server for communication with trading workers
-        this.tcpServer.start();
-
-
-        /**
-         * Web Socket Server setup
-         */
-        this.webSocketServer.onConnect(() => {
-            console.log('new web socket client connected!');
-        });
-
-        this.webSocketServer.onDisconnect(socket => {
-            console.log('web socket client disconnected')
-        });
-
-        this.webSocketServer.onError((socket, err) => {
-            console.log('web socket client error:', err);
-        });
-
-        this.webSocketServer.onMessage((socket, message) => {
-            console.log('web socket client', message);
-            
-        });
-
-        // start a websocket server for communication with web clients and mobile app clients (socket.io)
-        this.webSocketServer.start();
-
 
         /**
          * Exchange communication setup
+         * - add outbound messages for socket gateway (message bus)
+         * - add market data updates for backtester and trade worker (message bus)
          */
         this.exchangeCommunicator.onTickerUpdate((exchange, symbol, data) => {
             // store in time series database
-            const point = new Point('ticker_data')
+            if(context.logData) {
+                const point = new Point('ticker_data')
                 .tag('exchange', exchange)
                 .tag('symbol', symbol)
                 .tag('interval', '1s')
@@ -144,16 +118,21 @@ export default class System
                 .floatField('volume', parseFloat(data.size))
                 .timestamp(new Date(data.time));
             
-            this.influxWrite.writePoint(point);
+                this.influxWrite.writePoint(point);
+            }
 
-            console.log(exchange, symbol);
+            // console.log(exchange, symbol);
 
             // notify web and mobile clients (web socket)
         });
 
+        /**
+         * Kline/candlestick data updates
+         */
         this.exchangeCommunicator.onKlineUpdate((exchange, interval, symbol, data) => {
             // store in time series database
-            const point = new Point('klines')
+            if(context.logData) {
+                const point = new Point('klines')
                 .tag('exchange', exchange)
                 .tag('symbol', symbol)
                 .tag('interval', interval)
@@ -166,45 +145,105 @@ export default class System
                 .floatField('total', parseFloat(data.total))
                 .timestamp(new Date(data.timestamp));
             
-            this.influxWrite.writePoint(point);
+                this.influxWrite.writePoint(point);
+            }
 
-            // console.log(exchange, interval, symbol, data);
-            // notify web and mobile clients (web socket)
+            console.log(exchange, interval, symbol);
+
+            // put exchange market data update onto the message bus
+            context.messageBus.sendEvent('klines', 'MARKET_DATA_UPDATE', {
+                serviceId:  process.env.SERVICE_ID,
+                instanceId: process.env.INSTANCE_ID,
+                exchange,
+                symbol,
+                data
+            });
+
+            // put outbound socket-gateway messages onto the message bus
+            /*context.messageBus.sendEvent('socket-gateway', 'exchanges/' + exchange + '/KLINE_UPDATE', {
+
+            });*/
         });
 
+        /**
+         * Best 50 depth levels from order book
+         */
         this.exchangeCommunicator.onOrderBookUpdate((exchange, symbol, data) => {
             // notify web and mobile clients (web socket)
+            console.log(exchange, symbol, data);
         });
 
-        this.exchangeCommunicator.onOrderUpdate((exchange, symbol, data) => {
+        /**
+         * Individual level 3 depth data from order book
+         */
+        /*this.exchangeCommunicator.onOrderUpdate((exchange, symbol, data) => {
             // notify web and mobile clients (web socket)
-        });
+        });*/
 
+        /**
+         * Order updates for an exchange account
+         */
         this.exchangeCommunicator.onAccountTradeUpdate((exchange, account, symbol, data) => {
             // notify specific web and mobile clients (web socket)
         });
 
+        /**
+         * Account updates for an exchange account
+         */
         this.exchangeCommunicator.onAccountBalanceUpdate((exchange, account, symbol, data) => {
             // notify specific web and mobile clients (web socket)
         });
 
         this.exchangeCommunicator.start({
-            exchanges,
-            symbols,
-            accounts
+            exchanges: this.exchanges,
+            symbols:   this.symbols,
+            accounts:  this.exchangeAccounts
+        });
+    }
+
+    /**
+     * Load data from the api and updating the exchange communicator
+     */
+    async loadData()
+    {
+        console.log('Loading data from api...');
+
+        const exchanges = await this.restAPI.getExchanges(); // get all supported exchanges from api
+        const symbols   = await this.restAPI.getTickerSymbols(); // get all watched symbols from api for all supported exchanges
+        const accounts  = await this.restAPI.getExchangeAccounts(); // get all exchange accounts (connected exchanges) from api
+  
+        console.log('Exchanges loaded ' + exchanges);
+        console.log('Exchange symbols loaded ', symbols);
+        console.log('Exchange accounts loaded ', accounts);
+
+        // set initial data into repositories
+        this.exchanges.set(exchanges);
+        this.exchangeAccounts.set(accounts);
+        this.symbols.set(symbols);
+
+        // update the exchange communicator with the newest data
+        this.exchangeCommunicator.update({
+            exchanges: this.exchanges,
+            symbols:   this.symbols,
+            accounts:  this.exchangeAccounts
         });
     }
 
     /**
      * Stop the system
-     * 
-     * - stop TCP server
-     * - stop WebSocket server
+     *
+     * - stop exchange communicator
      */
-    stop(): void
+    async stop()
     {
-        this.tcpServer.stop();
-        this.webSocketServer.stop();
-        this.exchangeCommunicator.stop();
+        // let the service registry know that a micro-service is offline
+        await this.messageBus.sendEvent('service-registry', 'SERVICE_OFFLINE', {
+            instanceId: process.env.INSTANCE_ID,
+            serviceId:  process.env.SERVICE_ID
+        });
+
+        await this.exchangeCommunicator.stop();
+
+        await this.messageBus.disconnect();
     }
 }

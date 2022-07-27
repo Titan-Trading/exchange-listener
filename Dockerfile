@@ -1,13 +1,12 @@
-FROM node:latest
+FROM node:16
 
-WORKDIR /usr/src/app
+WORKDIR /var/www
 
-COPY ./package*.json /usr/src/app
+COPY ./package*.json ./
+COPY ./tsconfig.json ./
 
-RUN npm install
+RUN yarn install
 
-COPY ./ /usr/src/app
+COPY . .
 
-EXPOSE 8888
-
-CMD ["node", "index.js"]
+RUN yarn build

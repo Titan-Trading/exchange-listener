@@ -1,34 +1,77 @@
 version: '3.8'
 services:
 
-  #Socket Service
-  socket-server:
+  #Exchange Listener Service
+  exchange-listener-1:
     build:
       args:
         user: test
         uid: 1000
       context: ./
       dockerfile:  Dockerfile
-    container_name: socket-server
+    container_name: exchange-listener
+    restart: unless-stopped
+    tty: true
+    depends_on:
+      - influxdb
+    env_file:
+      - .one.env
+    volumes:
+      - app:/usr/src/app
+    command:
+      - yarn
+      - start
+  # exchange-listener-2:
+  #   build:
+  #     args:
+  #       user: test
+  #       uid: 1000
+  #     context: ./
+  #     dockerfile:  Dockerfile
+  #   restart: unless-stopped
+  #   tty: true
+  #   env_file:
+  #     - .two.env
+  #   volumes:
+  #     - app:/usr/src/app
+  #   command:
+  #     - yarn
+  #     - start
+
+  #InfluxDB Service
+  influxdb:
+    image: influxdb:latest
+    container_name: influxdb
     restart: unless-stopped
     tty: true
     ports:
-      - "8888:8888"
+      - "8086:8086"
+    environment:
+        DOCKER_INFLUXDB_INIT_MODE: setup
+        DOCKER_INFLUXDB_INIT_USERNAME: admin
+        DOCKER_INFLUXDB_INIT_PASSWORD: password
+        DOCKER_INFLUXDB_INIT_ORG: simple-trader
+        DOCKER_INFLUXDB_INIT_BUCKET: simple-trader
     volumes:
-      - websocketdata:/usr/src/app
-    networks:
-      - app-network
+      - influxdbdata:/var/lib/influxdb2
 
 #Docker Networks
 networks:
-  app-network:
-    driver: bridge
+  default:
+    name: 'simple-trader'
+    external: true
 
 #Volumes
 volumes:
-  websocketdata:
-      driver: local
-      driver_opts:
-        type: none
-        o: bind
-        device: ./
+  app:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ./
+  influxdbdata:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ./data/influxdb
