@@ -30,7 +30,7 @@ export default class RestClient
 
             req.headers['st-api-timestamp'] = timestamp.toString();
             req.headers['st-api-key'] = this.apiKey;
-            req.headers['st-api-signature'] = this.signRequest(timestamp, req);
+            req.headers['st-api-sign'] = this.signRequest(timestamp, req);
         
             return req;
         });

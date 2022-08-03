@@ -12,189 +12,89 @@
  * - Add, update or remove a user's exchange account
  */
 
-import { randomUUID } from "crypto";
-import ExchangeAccounts from "../../repositories/ExchangeAccounts";
+import RestAPI from "../../utilities/RestAPI";
+import PubSub from "../../utilities/PubSub";
 import Exchanges from "../../repositories/Exchanges";
-import Symbols from "../../repositories/Symbols";
-import WebSocketClient from "../../utilities/WebSocketClient";
-import KuCoinRestAPI from "./exchanges/KuCoin/RestAPI";
 
 export default class ExchangeCommunicator
 {
-    _onTickerUpdate: (exchange: string, symbol: string, data: any) => void;
-    _onKlineUpdate: (exchange: string, interval: string, symbol: string, data: any) => void;
-    _onOrderBookUpdate: (exchange: string, symbol: string, data: any) => void;
-    _onOrderUpdate: (exchange: string, symbol: string, data: any) => void;
-    _onAccountTradeUpdate: (exchange: string, accountId: string, symbol: string, data: any) => void;
-    _onAccountBalanceUpdate: (exchange: string, accountId: string, symbol: string, data: any) => void;
-    _onError: (err) => void;
-    _exchangeAPIs: any;
-    _exchangeSockets: any;
+    _restAPI: RestAPI;
+    _eventBus: PubSub;
+    private _repos: {exchanges: Exchanges};
+    _exchangeClients: any;
 
-    constructor()
+    constructor(restAPI: RestAPI)
     {
-        
+        this._restAPI = restAPI;
+
+        this._eventBus = new PubSub();
+
+        this._exchangeClients = {};
     }
 
     /**
      * Start exchange connections
      */
-    start(repos: {exchanges: Exchanges, symbols: Symbols, accounts: ExchangeAccounts}): void
+    async connect()
     {
-        this._exchangeAPIs = {};
-        this._exchangeSockets = {};
+        if(typeof this._repos === 'undefined') {
+            return false;
+        }
 
-        const context = this;
+        const exchanges = this._repos.exchanges.get();
 
-        const symbols = repos.symbols.get();
-        const accounts = repos.accounts.get();
+        let context = this;
 
         // loop through each exchange
-        repos.exchanges.get().map(async exchange => {
-            switch(exchange.name) {
-                case 'KuCoin':
-                    this._exchangeAPIs['KuCoin'] = new KuCoinRestAPI('https://api.kucoin.com');
+        let exchangeClientPromises = [];
+        for(let iExchange in exchanges) {
+            const exchange = exchanges[iExchange];
 
-                    const initData = await this._exchangeAPIs['KuCoin'].getInitialData();
+            const exchangeClientPromise = new Promise(async (resolve, reject) => {
 
-                    const webSocketToken = initData.data.token;
-                    const webSocketHost = initData.data.instanceServers[0].endpoint;
-                    const webSocketPingInterval = initData.data.instanceServers[0].pingInterval;
+                // use a exchange client instance to setup the rest and socket api, if one is found for the given exchange
+                import('./exchanges/' + exchange.name + '/ExchangeClient').then(({ExchangeClient}) => {
 
-                    this._exchangeSockets['KuCoin'] = new WebSocketClient({host: webSocketHost + '?token=' + webSocketToken});
+                    // check if exchange is supported
+                    if(typeof ExchangeClient !== 'function') {
+                        console.log('System: unsupported exchange: ' + exchange.name);
 
-                    const socket = this._exchangeSockets['KuCoin'];
-                    socket.onConnect(() => {
-                        console.log('Connected to KuCoin socket server!');
+                        return resolve({
+                            exchangeName: exchange.name,
+                            connected: false
+                        });
+                    }
+
+                    context._exchangeClients[exchange.name] = new ExchangeClient(context._restAPI, context._eventBus, exchange);
+
+                    // initialize channels and accounts
+                    context._exchangeClients[exchange.name].connect().then(() => {
+                        return resolve({
+                            exchangeName: exchange.name,
+                            connected: true
+                        });
                     });
+                });
+            });
 
-                    let channels = {};
-                    let allSymbolsString = '';
+            exchangeClientPromises.push(exchangeClientPromise);
+        }
 
-                    // loop through all exchange accounts for the exchange
-                    accounts.map((account, index) => {
+        Promise.all(exchangeClientPromises).then((exchangeClientResults) => {
 
-                    });
+            // check if all are true
+            let exchangesConnected = 0;
+            for(let iExchange in exchangeClientResults) {
+                const result = exchangeClientResults[iExchange];
 
-                    // loop through all symbols for the exchange
-                    symbols.map((symbol, index) => {
-                        // klines
-                        const symbolKlinesId = randomUUID();
-                        channels[symbolKlinesId] = {
-                            config: {
-                                id: symbolKlinesId,
-                                type: 'subscribe',
-                                topic: '/market/candles:' + symbol.target_currency.name + '-' + symbol.base_currency.name + '_1min',
-                                response: true
-                            },
-                            symbol
-                        };
+                if(result.connected) {
+                    exchangesConnected++;
+                }
+            }
 
-                        // compile list of symbols (separated by comma)
-                        allSymbolsString += symbol.target_currency.name + '-' + symbol.base_currency.name;
-                        if(index < symbols.length - 1) {
-                            allSymbolsString += ',';
-                        }
-                    });
-
-                    // level 2 depth chart
-                    const level2DepthId = randomUUID();
-                    channels[level2DepthId] = {
-                        config: {
-                            id: level2DepthId,
-                            type: 'subscribe',
-                            topic: '/spotMarket/level2Depth50:' + allSymbolsString
-                        }
-                    };
-
-                    const pingId = randomUUID();
-                    let pingTimer = null;
-
-                    socket.onMessage((data) => {
-
-                        // once welcome message is received subscribe to different topics/channels
-                        if(data.type === 'welcome') {
-                            // subscribe to all symbol ticker
-                            // socket.sendMessage({
-                            //     id: allSymbolTickerId,                          
-                            //     type: 'subscribe',
-                            //     topic: '/market/ticker:all',
-                            //     response: true                             
-                            // });
-                            // console.log('Subscribe: ' + allSymbolTickerId);
-
-                            // subscribe to all symbol channels
-                            // subscribe to candle/kline
-                            for(let channelId in channels) {
-                                const symbol = channels[channelId].symbol;
-                                if(typeof channels[channelId].symbol !== 'undefined') {
-                                    console.log('Subscribe channel: ' + symbol.target_currency.name + '-' + symbol.base_currency.name);
-                                }
-                                else {
-                                    console.log('Subscribe channel: ' + channelId);
-                                }
-
-                                socket.sendMessage(channels[channelId].config);
-                            }
-
-                            // setup ping timer
-                            setInterval(() => {
-                                socket.sendMessage({
-                                    id: pingId,                          
-                                    type: 'ping'                        
-                                });
-
-                                // console.log('Ping: ' + pingId);
-                            }, webSocketPingInterval);
-                        }
-                        // acknowledge ping
-                        else if(data.type === 'pong') {
-                            // console.log('Pong: ' + pingId);
-                        }
-                        // acknowledge that a topic/channel was subscribed to
-                        else if(data.type === 'ack') {
-                            if(typeof channels[data.id] !== 'undefined') {
-                                if(typeof channels[data.id].symbol !== 'undefined') {
-                                    const symbol = channels[data.id].symbol;
-                                    console.log('Acknowledge channel: ' + symbol.target_currency.name + '-' + symbol.base_currency.name);
-                                }
-                                else {
-                                    console.log('Acknowledge channel: ' + data.id);
-                                }
-                            }
-                        }
-                        // channel message
-                        else if(data.type === 'message') {
-                            // ticker data (all symbols)
-                            if(data.topic === '/market/ticker:all') {
-                                if(typeof context._onTickerUpdate === 'function') {
-                                    context._onTickerUpdate(exchange.name, data.subject, data.data);
-                                }
-                            }
-                            else if(data.subject && data.subject === 'trade.candles.update') {
-                                if(typeof context._onKlineUpdate === 'function') {
-                                    context._onKlineUpdate(exchange.name, '1m', data.data.symbol, {
-                                        startTimestamp: data.data.candles[0],
-                                        open: data.data.candles[1],
-                                        close: data.data.candles[2],
-                                        high: data.data.candles[3],
-                                        low: data.data.candles[4],
-                                        volume: data.data.candles[5],
-                                        total: data.data.candles[6],
-                                        timestamp: Math.trunc(data.data.time / 1000000)
-                                    });
-                                }
-                            }
-                            else if(data.subject && data.subject === 'level2') {
-                                if(typeof context._onOrderBookUpdate === 'function') {
-                                    const symbol = data.topic.split(':')[1];
-                                    context._onOrderBookUpdate(exchange.name, symbol, data.data);
-                                }
-                            }
-                        }
-
-                    });
-                break;
+            // emit on connect if all exchanges are connected successfully
+            if(exchangesConnected === exchangeClientResults.length) {
+                context._eventBus.emit('onConnect', exchangeClientResults);
             }
         });
     }
@@ -202,29 +102,118 @@ export default class ExchangeCommunicator
     /**
      * Update exchange connections
      */
-    update(repos: {exchanges: Exchanges, symbols: Symbols, accounts: ExchangeAccounts}): void
+    update(repos: {exchanges: Exchanges}): void
     {
-        const context = this;
+        let context = this;
+        this._repos = repos;
 
-        // stop the connections
-        this.stop();
+        const exchanges = this._repos.exchanges.get();
 
-        // start the connections back up with new data
-        this.start(repos);
+        /**
+         * Loop through all exchanges
+         */
+        for(let iExchange in exchanges) {
+            const exchange = exchanges[iExchange];
+
+            /**
+             * If exchange client already exists
+             */
+            if(typeof this._exchangeClients[exchange.name] !== 'undefined') {
+                const exchangeClient = this._exchangeClients[exchange.name];
+
+                /**
+                 * If exchange client is not already connected
+                 * - create socket connection
+                 * - setup symbol channels
+                 * - setup accounts managers
+                 */
+                if(!exchangeClient.isConnected()) {
+                    exchangeClient.connect();
+                }
+                /**
+                 * If exchange client is already connected
+                 * - update symbols channels
+                 * - update accounts managers
+                 */
+                else {
+                    exchangeClient.update();
+                }
+            }
+            /**
+             * If exchange client not already exist
+             * - import exchange client
+             * - create exchange client instance
+             * - initialize exchange client using symbols and accounts for exchange
+             */
+            else {
+                // use a exchange client instance to setup the rest and socket api, if one is found for the given exchange
+                import('./exchanges/' + exchange.name + '/ExchangeClient').then(({ExchangeClient}) => {
+
+                    // check if exchange is supported
+                    if(typeof ExchangeClient !== 'function') {
+                        console.log('System: unsupported exchange: ' + exchange.name);
+
+                        return;
+                    }
+
+                    context._exchangeClients[exchange.name] = new ExchangeClient(context._restAPI, context._eventBus, exchange);
+
+                    // initialize channels and accounts
+                    context._exchangeClients[exchange.name].connect().then(() => {
+                        
+                    });
+                });
+            }
+        }
     }
 
     /**
      * Stop exchange connections
      */
-    stop(): void
+    disconnect(): void
     {
         // loop through each exchange and close the connection
-        for(let eSI in this._exchangeSockets) {
-            this._exchangeSockets[eSI].disconnect();
+        for(let eSI in this._exchangeClients) {
+            this._exchangeClients[eSI].disconnect();
         }
-        
-        this._exchangeAPIs = {};
-        this._exchangeSockets = {};
+
+        this._eventBus.emit('onDisconnect', {});
+    }
+
+    /**
+     * When all exchange clients are connected
+     * @param callback 
+     */
+    onConnect(callback: () => void)
+    {
+        this._eventBus.on('onConnect', callback);
+    }
+
+    /**
+     * When all exchange clients are disconnected
+     * @param callback 
+     */
+    onDisconnect(callback: () => void)
+    {
+        this._eventBus.on('onDisconnect', callback);
+    }
+
+    /**
+     * When a single exchange is connected
+     * @param callback 
+     */
+    onExchangeConnect(callback: (exchangeName: string) => void)
+    {
+        this._eventBus.on('onExchangeConnect', ({exchangeName}) => callback(exchangeName));
+    }
+
+    /**
+     * When a single exchange is disconnected
+     * @param callback 
+     */
+    onExchangeDisconnect(callback: (exchangeName: string, code: string, reason: string) => void)
+    {
+        this._eventBus.on('onExchangeDisconnect', ({exchangeName, code, reason}) => callback(exchangeName, code, reason));
     }
 
     /**
@@ -234,7 +223,9 @@ export default class ExchangeCommunicator
      */
     onTickerUpdate(callback: (exchange: string, symbol: string, data: any) => void): void
     {
-        this._onTickerUpdate = callback;
+        this._eventBus.on('onTickerUpdate', (eventData) => {
+            callback(eventData.exchangeName, eventData.symbol, eventData.data)
+        });
     }
 
     /**
@@ -244,7 +235,9 @@ export default class ExchangeCommunicator
      */
     onKlineUpdate(callback: (exchange: string, interval: string, symbol: string, data: any) => void): void
     {
-        this._onKlineUpdate = callback;
+        this._eventBus.on('onKlineUpdate', (eventData) => {
+            callback(eventData.exchangeName, eventData.interval, eventData.symbol, eventData.data)
+        });
     }
 
     /**
@@ -254,7 +247,9 @@ export default class ExchangeCommunicator
      */
     onOrderBookUpdate(callback: (exchange: string, symbol: string, data: any) => void): void
     {
-        this._onOrderBookUpdate = callback;
+        this._eventBus.on('onOrderBookUpdate', (eventData) => {
+            callback(eventData.exchangeName, eventData.symbol, eventData.data)
+        });
     }
 
     /**
@@ -264,7 +259,9 @@ export default class ExchangeCommunicator
      */
     onOrderUpdate(callback: (exchange: string, symbol: string, data: any) => void): void
     {
-        this._onOrderUpdate = callback;
+        this._eventBus.on('onOrderUpdate', (eventData) => {
+            callback(eventData.exchangeName, eventData.symbol, eventData.data)
+        });
     }
 
     /**
@@ -272,9 +269,11 @@ export default class ExchangeCommunicator
      * 
      * @param callback 
      */
-    onAccountTradeUpdate(callback: (exchange: string, accountId: string, symbol: string, data: any) => void): void
+    onAccountTradeUpdate(callback: (exchange: string, accountId: string, data: any) => void): void
     {
-        this._onAccountTradeUpdate = callback;
+        this._eventBus.on('onAccountTradeUpdate', (eventData) => {
+            callback(eventData.exchangeName, eventData.accountId, eventData.data)
+        });
     }
 
     /**
@@ -282,8 +281,10 @@ export default class ExchangeCommunicator
      * 
      * @param callback 
      */
-    onAccountBalanceUpdate(callback: (exchange: string, accountId: string, symbol: string, data: any) => void): void
+    onAccountBalanceUpdate(callback: (exchange: string, accountId: string, data: any) => void): void
     {
-        this._onAccountBalanceUpdate = callback;
+        this._eventBus.on('onAccountBalanceUpdate', (eventData) => {
+            callback(eventData.exchangeName, eventData.accountId, eventData.data)
+        });
     }
 }
