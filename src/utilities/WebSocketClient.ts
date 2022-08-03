@@ -1,42 +1,34 @@
+import PubSub from './PubSub';
 import WebSocket from 'ws';
 
 export default class WebSocketClient
 {
-    client: WebSocket;
-    _onConnect: () => void;
-    _onDisconnect: () => void;
-    _onMessage: (message) => void;
-    _onError: (err) => void;
+    private _client: WebSocket;
+    private _eventBus: PubSub;
 
     constructor(config: {host: string})
     {
-        this.client = new WebSocket(config.host);
+        this._eventBus = new PubSub();
 
-        this.client.on('open', () => {
-            if(typeof this._onConnect === 'function') {
-                this._onConnect();
-            }
+        this._client = new WebSocket(config.host);
+
+        this._client.on('open', () => {
+            this._eventBus.emit('onConnect', {});
         });
 
-        this.client.on('close', () => {
-            if(typeof this._onDisconnect === 'function') {
-                this._onDisconnect();
-            }
+        this._client.on('close', (code, reason) => {
+            this._eventBus.emit('onDisconnect', {
+                code,
+                reason: Buffer.from(reason).toString()
+            });
         });
 
-        this.client.on('message', (data) => {
-            const rawMessage = Buffer.from(data).toString();
-            const message = JSON.parse(rawMessage);
-            
-            if(typeof this._onMessage === 'function') {
-                this._onMessage(message);
-            }
+        this._client.on('message', (data) => {
+            this._eventBus.emit('onMessage', JSON.parse(Buffer.from(data).toString()));
         });
 
-        this.client.on('error', (err) => {
-            if(typeof this._onError === 'function') {
-                this._onError(err);
-            }
+        this._client.on('error', (err) => {
+            this._eventBus.emit('onError', err);
         });
     }
 
@@ -45,7 +37,7 @@ export default class WebSocketClient
      */
     disconnect()
     {
-        this.client.close();
+        this._client.close();
     }
 
     /**
@@ -55,7 +47,7 @@ export default class WebSocketClient
      */
     onConnect(callback: () => void): void
     {
-        this._onConnect = callback;
+        this._eventBus.on('onConnect', callback);
     }
  
     /**
@@ -63,9 +55,9 @@ export default class WebSocketClient
      * 
      * @param callback 
      */
-    onDisconnect(callback: () => void): void
+    onDisconnect(callback: ({code, reason}) => void): void
     {
-        this._onDisconnect = callback;
+        this._eventBus.on('onDisconnect', callback);
     }
  
     /**
@@ -75,7 +67,7 @@ export default class WebSocketClient
      */
     onMessage(callback: (message) => void): void
     {
-        this._onMessage = callback;
+        this._eventBus.on('onMessage', callback);
     }
  
     /**
@@ -85,7 +77,7 @@ export default class WebSocketClient
      */
     onError(callback: (err) => void): void
     {
-        this._onError = callback;
+        this._eventBus.on('onError', callback);
     }
 
     /**
@@ -96,8 +88,7 @@ export default class WebSocketClient
     sendMessage(message: any): void
     {
         const messageString = JSON.stringify(message);
-        // const messageBuffer = Buffer.from(messageString);
 
-        this.client.send(messageString);
+        this._client.send(messageString);
     }
 }

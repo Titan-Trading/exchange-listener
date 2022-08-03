@@ -9,15 +9,14 @@ services:
         uid: 1000
       context: ./
       dockerfile:  Dockerfile
-    container_name: exchange-listener
+    hostname: exchange-listener-1
+    container_name: exchange-listener-1
     restart: unless-stopped
     tty: true
-    depends_on:
-      - influxdb
     env_file:
       - .one.env
     volumes:
-      - app:/usr/src/app
+      - app:/var/www/html
     command:
       - yarn
       - start
@@ -28,32 +27,17 @@ services:
   #       uid: 1000
   #     context: ./
   #     dockerfile:  Dockerfile
+  #   hostname: exchange-listener-2
+  #   container_name: exchange-listener-2
   #   restart: unless-stopped
   #   tty: true
   #   env_file:
   #     - .two.env
   #   volumes:
-  #     - app:/usr/src/app
+  #     - app:/var/www/html
   #   command:
   #     - yarn
-  #     - start
-
-  #InfluxDB Service
-  influxdb:
-    image: influxdb:latest
-    container_name: influxdb
-    restart: unless-stopped
-    tty: true
-    ports:
-      - "8086:8086"
-    environment:
-        DOCKER_INFLUXDB_INIT_MODE: setup
-        DOCKER_INFLUXDB_INIT_USERNAME: admin
-        DOCKER_INFLUXDB_INIT_PASSWORD: password
-        DOCKER_INFLUXDB_INIT_ORG: simple-trader
-        DOCKER_INFLUXDB_INIT_BUCKET: simple-trader
-    volumes:
-      - influxdbdata:/var/lib/influxdb2
+  #     - start-dev
 
 #Docker Networks
 networks:
@@ -69,9 +53,3 @@ volumes:
       type: none
       o: bind
       device: ./
-  influxdbdata:
-    driver: local
-    driver_opts:
-      type: none
-      o: bind
-      device: ./data/influxdb

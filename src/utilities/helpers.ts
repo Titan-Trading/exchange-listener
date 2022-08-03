@@ -7,23 +7,14 @@ import crypto from 'crypto';
 
 /**
  * Get the ticker symbol for a given exchange and trade
- * @param {string} exchangeName 
- * @param {string} baseTickerSymbol 
- * @param {string} targetTickerSymbol 
+ * @param {object} exchangeName 
+ * @param {object} symbol
  */
-export function getTickerSymbol(exchangeName, baseTickerSymbol, targetTickerSymbol) {
-    switch(exchangeName) {
-        case 'Binance':
-            return targetTickerSymbol + baseTickerSymbol;
-        case 'Deversifi':
-            return baseTickerSymbol + ':' + targetTickerSymbol;
-        case 'Poloniex':
-            return baseTickerSymbol + '_' + targetTickerSymbol;
-        case 'KuCoin':
-        case 'Loopring':
-            return targetTickerSymbol + '-' + baseTickerSymbol;
-    }
-    return null;
+export function getTickerSymbol(exchange, symbol) {
+    let exchangeSymbol = exchange.symbol_template
+        .replace('[target]', symbol.target_currency.name)
+        .replace('[base]', symbol.base_currency.name)
+    return exchangeSymbol;
 }
 
 /**
@@ -46,11 +37,11 @@ export function getUSDSymbol(exchangeName) {
  * Get default currency pairs for the given exchange
  * @param {string} exchangeName 
  */
-export function getDefaultPairsByExchange(exchangeName) {
+export function getDefaultPairsByExchange(exchange) {
     let baseSymbols = [];
     let targetSymbols = [];
 
-    switch(exchangeName) {
+    switch(exchange.name) {
         case 'Binance':
             baseSymbols = [
                 'USDT',
@@ -117,8 +108,17 @@ export function getDefaultPairsByExchange(exchangeName) {
 
             // skip same base and target symbols
             if(baseSymbol === targetSymbol) continue;
+
+            let symbol = {
+                target_currency: {
+                    name: targetSymbol
+                },
+                base_currency: {
+                    name: baseSymbol
+                }
+            }
             
-            symbols.push(getTickerSymbol(exchangeName, baseSymbol, targetSymbol));
+            symbols.push(getTickerSymbol(exchange, symbol));
         }
     }
 

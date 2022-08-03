@@ -7,11 +7,26 @@ import RestClient from './RestClient';
 export default class RestAPI extends RestClient
 {
     /**
+     * Get API connect token
+     * @returns 
+     */
+    async getAPIConnectToken()
+    {
+        const res = await this.client.post(this.baseURL + '/api-connect-tokens');
+
+        if(!res || !res.data) {
+            return null;
+        }
+
+        return res.data.access_token;
+    }
+
+    /**
      * Get exchanges
      */
     async getExchanges()
     {
-        const res = await this.client.get(this.baseURL + '/exchanges');
+        const res = await this.client.get(this.baseURL + '/admin/trading/exchanges');
 
         if(!res || !res.data) {
             return [];
@@ -23,9 +38,9 @@ export default class RestAPI extends RestClient
     /**
      * Get used ticket symbols (all exchanges)
      */
-    async getTickerSymbols()
+    async getTickerSymbols(exchangeId: number)
     {
-        const res = await this.client.get(this.baseURL + '/symbols');
+        const res = await this.client.get(this.baseURL + '/admin/trading/symbols', {exchange_id: exchangeId});
 
         if(!res || !res.data) {
             return [];
@@ -39,7 +54,7 @@ export default class RestAPI extends RestClient
      */
     async getIndicators()
     {
-        const res = await this.client.get(this.baseURL + '/indicators');
+        const res = await this.client.get(this.baseURL + '/admin/trading/indicators');
 
         if(!res || !res.data) {
             return [];
@@ -51,9 +66,9 @@ export default class RestAPI extends RestClient
     /**
      * Get connection exchanges/exchange accounts
      */
-    async getExchangeAccounts()
+    async getExchangeAccounts(exchangeId: number)
     {
-        const res = await this.client.get(this.baseURL + '/connected-exchanges');
+        const res = await this.client.get(this.baseURL + '/admin/trading/exchange-accounts', {exchange_id: exchangeId});
  
         if(!res || !res.data) {
             return [];
@@ -67,7 +82,7 @@ export default class RestAPI extends RestClient
      */
     async getBotSessions()
     {
-        const res = await this.client.get(this.baseURL + '/bots/sessions');
+        const res = await this.client.get(this.baseURL + '/admin/trading/bots/sessions');
 
         if(!res || !res.data) {
             return [];
@@ -81,7 +96,7 @@ export default class RestAPI extends RestClient
      */
     async updateBotSession(botId: Number, id: Number, data: any)
     {
-        const res = await this.client.put(this.baseURL + '/bots/' + botId + '/sessions/' + id, data);
+        const res = await this.client.put(this.baseURL + '/admin/trading/bots/' + botId + '/sessions/' + id, data);
  
         if(!res || !res.data) {
             return [];
@@ -95,7 +110,7 @@ export default class RestAPI extends RestClient
      */
     async getConditionalTrades()
     {
-        const res = await this.client.get(this.baseURL + '/conditional-trades');
+        const res = await this.client.get(this.baseURL + '/admin/trading/conditional-trades');
 
         if(!res || !res.data) {
             return [];
@@ -109,7 +124,7 @@ export default class RestAPI extends RestClient
      */
     async updateConditionalTrade(id: Number, data: any)
     {
-        const res = await this.client.put(this.baseURL + '/conditional-trades/' + id, data);
+        const res = await this.client.put(this.baseURL + '/admin/trading/conditional-trades/' + id, data);
  
         if(!res || !res.data) {
             return [];
@@ -123,7 +138,7 @@ export default class RestAPI extends RestClient
      */
     async addOrder(data: any)
     {
-        const res = await this.client.put(this.baseURL + '/orders', data);
+        const res = await this.client.put(this.baseURL + '/admin/trading/orders', data);
  
         if(!res || !res.data) {
             return [];
@@ -137,7 +152,7 @@ export default class RestAPI extends RestClient
      */
     async updateOrder(id: Number, data: any)
     {
-        const res = await this.client.put(this.baseURL + '/orders/' + id, data);
+        const res = await this.client.put(this.baseURL + '/admin/trading/orders/' + id, data);
  
         if(!res || !res.data) {
             return [];
@@ -151,7 +166,7 @@ export default class RestAPI extends RestClient
      */
     async addOrderFill(id: Number, data: any)
     {
-        const res = await this.client.put(this.baseURL + '/orders/' + id + '/fills', data);
+        const res = await this.client.put(this.baseURL + '/admin/trading/orders/' + id + '/fills', data);
  
         if(!res || !res.data) {
             return [];

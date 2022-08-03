@@ -2,7 +2,7 @@
 
 export default class PubSub
 {
-    subscribers = {};
+    private subscribers = {};
 
     constructor()
     {
