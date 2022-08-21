@@ -42,6 +42,7 @@ system.start()
 process.on('SIGUSR2', async () => {
     console.info('SIGUSR2 signal received.');
 
+    console.log('System: stopping...');
     await system.stop();
     console.log('System: stopped');
 

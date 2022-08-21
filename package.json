@@ -5,7 +5,7 @@
   "main": "dist/index.js",
   "license": "ISC",
   "scripts": {
-    "start": "NODE_ENV=production node dist/index.js",
+    "start": "NODE_ENV=production node --max_old_space_size=8192 dist/index.js",
     "test": "echo \"Error: no test specified\" && exit 1",
     "build": "tsc",
     "build-start": "tsc && node dist/index.js",
@@ -23,7 +23,7 @@
     "crypto": "^1.0.1",
     "dotenv": "^10.0.0",
     "express": "^4.17.1",
-    "kafkajs": "^1.16.0",
+    "kafkajs": "^2.1.0",
     "moment": "^2.29.1",
     "socket.io-client": "^4.5.1",
     "socket.io-json-parser": "^3.0.0",

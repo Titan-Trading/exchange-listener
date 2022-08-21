@@ -20,8 +20,8 @@ export default class MessageBus
             connectionTimeout: 30000,
             enforceRequestTimeout: false,
             retry: {
-                initialRetryTime: 100,
-                retries: 8
+                initialRetryTime: 10000,
+                retries: 10,
             }
         });
 
@@ -32,7 +32,21 @@ export default class MessageBus
 
         // setup kafka consumer
         this.consumer = this.kafka.consumer({
-            groupId: this.consumerGroupId
+            groupId: this.consumerGroupId,
+            retry: {
+                restartOnFailure: function (err) {
+                    return new Promise((resolve, reject) => {
+                        resolve(true);
+                    });
+                }
+            }
+        });
+
+        this.consumer.on('consumer.crash', (event) => {
+            console.log('crash detected, restart');
+            console.log(event);
+            this.consumer.disconnect();
+            this.consumer.connect();
         });
 
         // setup kafka producer
@@ -47,55 +61,64 @@ export default class MessageBus
     {
         let context = this;
 
-        // connect the client type
-        await this[clientType || 'consumer'].connect();
+        try {
+            // connect the client type
+            await this[clientType || 'consumer'].connect();
 
-        if(!clientType) {
-            await this['producer'].connect();
-            this.producerIsConnected = true;
-        }
-        else if(clientType == 'producer') {
-            this.pubsub.emit('producerOnConnect', {});
-        }
-
-        // client type is consumer
-        if(!clientType || clientType === 'consumer') {
-            // subscribe to all topics from the config
-            const topicsConfig = process.env.TOPICS.split(',');
-            this.topics = this.topics.length ? this.topics : topicsConfig;
-            for(var iT in this.topics) {
-                const topic = this.topics[iT];
-                await this.consumer.subscribe({
-                    topic
-                });
+            if(!clientType) {
+                await this['producer'].connect();
+                this.producerIsConnected = true;
+            }
+            else if(clientType == 'producer') {
+                this.pubsub.emit('producerOnConnect', {});
             }
 
-            // setup a callback for messages that are consumed
-            await this.consumer.run({
-                eachMessage: async ({ topic, partition, message }) => {
-                    try {
-                        const messageKey = message.key ? Buffer.from(message.key).toString() : null;
-                        const messageData = message.value ? JSON.parse(Buffer.from(message.value).toString()) : null;
-
-                        // console.log('Channel: ' + topic);
-                        // console.log('Partition: ' + partition);
-                        // console.log('Message ID: ' + messageKey);
-                        // console.log('Message body: ', messageData);
-
-                        context.pubsub.emit(topic, messageData);
-                    }
-                    catch(ex) {
-                        console.error(ex);
-                    }
+            // client type is consumer
+            if(!clientType || clientType === 'consumer') {
+                // subscribe to all topics from the config
+                const topicsConfig = process.env.TOPICS.split(',');
+                this.topics = this.topics.length ? this.topics : topicsConfig;
+                for(var iT in this.topics) {
+                    const topic = this.topics[iT];
+                    await this.consumer.subscribe({
+                        topic
+                    });
                 }
-            });
 
-            if(clientType === 'consumer') {
-                this.pubsub.emit('consumerOnConnect', {});
+                // setup a callback for messages that are consumed
+                await this.consumer.run({
+                    eachMessage: async ({ topic, partition, message }) => {
+                        try {
+                            const messageKey = message.key ? Buffer.from(message.key).toString() : null;
+                            const messageData = message.value ? JSON.parse(Buffer.from(message.value).toString()) : null;
+
+                            // console.log('Channel: ' + topic);
+                            // console.log('Partition: ' + partition);
+                            // console.log('Message ID: ' + messageKey);
+                            // console.log('Message body: ', messageData);
+
+                            context.pubsub.emit(topic, messageData);
+                        }
+                        catch(ex) {
+                            console.error(ex);
+                        }
+                    }
+                });
+
+                if(clientType === 'consumer') {
+                    this.pubsub.emit('consumerOnConnect', {});
+                }
+                else {
+                    this.pubsub.emit('onConnect', {});
+                }
             }
-            else {
-                this.pubsub.emit('onConnect', {});
-            }
+        }
+        catch(ex) {
+            console.log('crash detected, restart');
+            console.log(ex);
+
+            context.disconnect();
+            context.connect();
         }
     }
 

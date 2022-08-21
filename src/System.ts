@@ -5,6 +5,7 @@ import {InfluxDB, Point, HttpError} from '@influxdata/influxdb-client';
 import Exchanges from './repositories/Exchanges';
 import MessageBus from './utilities/MessageBus';
 import SocketIOClient from './utilities/SocketIOClient';
+import { sleep } from './utilities/helpers';
 
 
 /**
@@ -13,16 +14,16 @@ import SocketIOClient from './utilities/SocketIOClient';
 
 export default class System
 {
-    messageBus: MessageBus;
-    restAPI: RestAPI;
-    apiConnectToken: string;
-    socketServer: SocketIOClient;
-    exchangeCommunicator: ExchangeCommunicator;
-    influxWrite: any;
+    private _messageBus: MessageBus;
+    private _restAPI: RestAPI;
+    private _apiConnectToken: string;
+    private _socketServer: SocketIOClient;
+    private _exchangeCommunicator: ExchangeCommunicator;
+    private _influxWrite: any;
 
-    logData: string|boolean;
+    private _logData: string|boolean;
 
-    exchanges: Exchanges;
+    private _exchanges: Exchanges;
 
     constructor()
     {
@@ -33,32 +34,32 @@ export default class System
         const socketServerURL = process.env.WEBSOCKET_SERVER_URL ? process.env.WEBSOCKET_SERVER_URL : '';
         const logExchangeData = process.env.LOG_EXCHANGE_DATA ? process.env.LOG_EXCHANGE_DATA : 'false';
 
-        this.logData = logExchangeData;
+        this._logData = logExchangeData;
 
         // create message bus instance
-        this.messageBus = new MessageBus(process.env.CLIENT_ID, process.env.GROUP_ID, [process.env.KAFKA_BOOTSTRAP_SERVER]);
+        this._messageBus = new MessageBus(process.env.CLIENT_ID, process.env.GROUP_ID, [process.env.KAFKA_BOOTSTRAP_SERVER]);
 
         // create websocket client instance
-        this.socketServer = new SocketIOClient({host: socketServerURL});
+        this._socketServer = new SocketIOClient({host: socketServerURL});
 
         // create REST API instance
-        this.restAPI = new RestAPI(restAPIURL, restAPIKey, restAPIKeySecret);
+        this._restAPI = new RestAPI(restAPIURL, restAPIKey, restAPIKeySecret);
 
         // create exchange communicator instance
-        this.exchangeCommunicator = new ExchangeCommunicator(this.restAPI);
+        this._exchangeCommunicator = new ExchangeCommunicator(this._restAPI);
 
         // create a write API, expecting point timestamps in nanoseconds (can be also 's', 'ms', 'us')
-        if(this.logData !== 'false') {
+        if(this._logData !== 'false') {
             const influxDB = new InfluxDB({
                 url:   process.env.INFLUX_URL,
                 token: process.env.INFLUX_TOKEN
             });
 
-            this.influxWrite = influxDB.getWriteApi(process.env.INFLUX_ORG, process.env.INFLUX_BUCKET, 'ns');
+            this._influxWrite = influxDB.getWriteApi(process.env.INFLUX_ORG, process.env.INFLUX_BUCKET, 'ns');
         }
         
         // create repository instances
-        this.exchanges = Exchanges.getInstance();
+        this._exchanges = Exchanges.getInstance();
     }
 
     /**
@@ -87,28 +88,28 @@ export default class System
                      */
                     if(process.env.SOCKET_GATEWAY !== 'false') {
                         console.log('System: connecting to socket gateway...');
-                        context.socketServer.connect(this.apiConnectToken);
+                        context._socketServer.connect(context._apiConnectToken);
                     }
                 });
 
                 /**
                  * When connected to socket gateway server
                  */
-                context.socketServer.onConnect(async () => {
+                context._socketServer.onConnect(async () => {
                     console.log('System: connected to socket gateway');
                 });
 
                 /**
                  * When disconnected from socket gateway server
                  */
-                context.socketServer.onDisconnect(async (reason) => {
+                context._socketServer.onDisconnect(async (reason) => {
                     console.log('System: disconnected from socket gateway', reason);
                 });
 
                 /**
                  * When error from socket gateway server
                  */
-                 context.socketServer.onError(async (error) => {
+                 context._socketServer.onError(async (error) => {
                     console.log('System: error from socket gateway', error);
                 });
 
@@ -117,7 +118,7 @@ export default class System
                  * - add outbound messages for socket gateway (socket gateway server)
                  * - add market data updates for backtester and trade worker (socket gateway server)
                  */
-                context.exchangeCommunicator.onTickerUpdate((exchange, symbol, data) => {
+                context._exchangeCommunicator.onTickerUpdate((exchange, symbol, data) => {
                     // store in time series database (too much data)
                     /*if(context.logData !== 'false') {
                         const point = new Point('ticker_data')
@@ -137,8 +138,9 @@ export default class System
                     // console.log(exchange, symbol, data);
 
                     // notify web and mobile clients (web socket)
-                    context.socketServer.sendMessage({
+                    context._socketServer.sendMessage({
                         meta: {
+                            listenerTimestamp: +new Date(),
                             category: 'EXCHANGE_DATA',
                             type: 'TICKER_UPDATE',
                             exchange: exchange
@@ -153,9 +155,9 @@ export default class System
                 /**
                  * Kline/candlestick data updates
                  */
-                context.exchangeCommunicator.onKlineUpdate((exchange, interval, symbol, data) => {
+                context._exchangeCommunicator.onKlineUpdate((exchange, interval, symbol, data) => {
                     // store in time series database (once a second)
-                    if(context.logData !== 'false') {
+                    if(context._logData !== 'false') {
                         const point = new Point('klines')
                         .tag('exchange', exchange)
                         .tag('symbol', symbol)
@@ -169,12 +171,14 @@ export default class System
                         .floatField('total', parseFloat(data.total))
                         .timestamp(new Date(data.timestamp));
                     
-                        context.influxWrite.writePoint(point);
+                        context._influxWrite.writePoint(point);
                     }
 
                     // notify web and mobile clients (web socket)
-                    context.socketServer.sendMessage({
+                    context._socketServer.sendMessage({
                         meta: {
+                            exchangeTimestamp: data.timestamp,
+                            listenerTimestamp: +new Date(),
                             category: 'EXCHANGE_DATA',
                             type: 'KLINE_UPDATE',
                             exchange: exchange
@@ -191,9 +195,9 @@ export default class System
                 /**
                  * Best 50 depth levels from order book
                  */
-                context.exchangeCommunicator.onOrderBookUpdate((exchange, symbol, data) => {
+                context._exchangeCommunicator.onOrderBookUpdate((exchange, symbol, data) => {
                     // store in time series database
-                    if(context.logData !== 'false') {
+                    if(context._logData !== 'false') {
                         /*const point = new Point('orderbook_data')
                         .tag('exchange', exchange)
                         .tag('symbol', symbol)
@@ -209,8 +213,10 @@ export default class System
                     }
 
                     // notify web and mobile clients (web socket)
-                    context.socketServer.sendMessage({
+                    context._socketServer.sendMessage({
                         meta: {
+                            exchangeTimestamp: data.timestamp,
+                            listenerTimestamp: +new Date(),
                             category: 'EXCHANGE_DATA',
                             type: 'ORDERBOOK_UPDATE',
                             exchange: exchange
@@ -227,7 +233,7 @@ export default class System
                 /**
                  * Individual level 3 depth data from order book (match execution)
                  */
-                context.exchangeCommunicator.onOrderUpdate((exchange, symbol, data) => {
+                context._exchangeCommunicator.onOrderUpdate((exchange, symbol, data) => {
                     // store in time series database (too much data)
                     /*if(context.logData !== 'false') {
                         const point = new Point('order_data')
@@ -247,8 +253,10 @@ export default class System
                     }*/
 
                     // notify web and mobile clients (web socket)
-                    context.socketServer.sendMessage({
+                    context._socketServer.sendMessage({
                         meta: {
+                            exchangeTimestamp: data.timestamp,
+                            listenerTimestamp: +new Date(),
                             category: 'EXCHANGE_DATA',
                             type: 'ORDER_UPDATE',
                             exchange: exchange
@@ -265,9 +273,9 @@ export default class System
                 /**
                  * Order updates for an exchange account
                  */
-                context.exchangeCommunicator.onAccountTradeUpdate((exchange, accountId, data) => {
+                context._exchangeCommunicator.onAccountTradeUpdate((exchange, accountId, data) => {
                     // store in time series database
-                    if(context.logData !== 'false') {
+                    if(context._logData !== 'false') {
                         const point = new Point('account_trade_data')
                         .tag('exchange', exchange)
                         .tag('accountId', accountId)
@@ -284,12 +292,14 @@ export default class System
                         .floatField('price', parseFloat(data.price))
                         .timestamp(new Date(data.timestamp));
                     
-                        context.influxWrite.writePoint(point);
+                        context._influxWrite.writePoint(point);
                     }
 
                     // notify specific web and mobile clients (web socket)
-                    context.socketServer.sendMessage({
+                    context._socketServer.sendMessage({
                         meta: {
+                            exchangeTimestamp: data.timestamp,
+                            listenerTimestamp: +new Date(),
                             category: 'EXCHANGE_ACCOUNT_DATA',
                             type: 'TRADE_UPDATE',
                             exchange: exchange
@@ -306,9 +316,9 @@ export default class System
                 /**
                  * Account updates for an exchange account
                  */
-                context.exchangeCommunicator.onAccountBalanceUpdate((exchange, accountId, data) => {
+                context._exchangeCommunicator.onAccountBalanceUpdate((exchange, accountId, data) => {
                     // store in time series database
-                    if(context.logData !== 'false') {
+                    if(context._logData !== 'false') {
                         const point = new Point('account_balance_data')
                         .tag('exchange', exchange)
                         .tag('accountId', accountId)
@@ -321,12 +331,14 @@ export default class System
                         .floatField('holdChange', parseFloat(data.holdChange))
                         .timestamp(new Date(data.timestamp));
                     
-                        context.influxWrite.writePoint(point);
+                        context._influxWrite.writePoint(point);
                     }
 
                     // notify specific web and mobile clients (web socket)
-                    context.socketServer.sendMessage({
+                    context._socketServer.sendMessage({
                         meta: {
+                            exchangeTimestamp: data.timestamp,
+                            listenerTimestamp: +new Date(),
                             category: 'EXCHANGE_ACCOUNT_DATA',
                             type: 'BALANCE_UPDATE',
                             exchange: exchange
@@ -341,26 +353,16 @@ export default class System
                 });
 
                 /**
-                 * Start the exchange communicator
-                 */
-                if(process.env.EXCHANGE_LISTENER !== 'false') {
-                    console.log('System: starting exchange communicator...');
-                    context.exchangeCommunicator.connect().then(() => {
-                        console.log('System: exchange communicator started');
-                    });
-                }
-
-                /**
                  * When connected to message bus
                  * - register service with service registry
                  */
-                context.messageBus.onConnect(async () => {
+                context._messageBus.onConnect(async () => {
                     console.log('System: connected to message bus');
             
                     /**
                      * Register with the service registry
                      */
-                    context.messageBus.sendEvent('service-registry', 'SERVICE_ONLINE', {
+                    context._messageBus.sendEvent('service-registry', 'SERVICE_ONLINE', {
                         instanceId: process.env.INSTANCE_ID,
                         serviceId:  process.env.SERVICE_ID,
                         supportedCommunicationChannels: ['bus'],
@@ -374,66 +376,100 @@ export default class System
                 /**
                  * When changes are made to exchanges (on message bus)
                  */
-                context.messageBus.onMessage('exchanges', async (message) => {
+                context._messageBus.onMessage('exchanges', async (message) => {
                     console.log('exchange update', message);
                     
                     // TODO: update exchanges without disconnecting exchange communicator
-                    const exchanges = await this.restAPI.getExchanges();
+                    const exchanges = await context._restAPI.getExchanges();
                     
                     console.log('System: exchanges loaded ', exchanges.length);
 
                     // set initial data into repositories
-                    this.exchanges.set(exchanges);
+                    context._exchanges.set(exchanges);
 
                     // update the exchange communicator with the newest data
-                    this.exchangeCommunicator.update({
-                        exchanges: this.exchanges
+                    context._exchangeCommunicator.update({
+                        exchanges: context._exchanges
                     });
                 });
 
                 /**
                  * When changes are made to exchange accounts (on message bus)
                  */
-                context.messageBus.onMessage('exchange-accounts', async (message) => {
+                context._messageBus.onMessage('exchange-accounts', async (message) => {
                     console.log('exchange account update', message);
                     
                     // TODO: update exchange accounts without disconnecting exchange communicator
-                    const exchanges = await this.restAPI.getExchanges();
+                    const exchanges = await context._restAPI.getExchanges();
                     
                     console.log('System: exchanges loaded ', exchanges.length);
 
                     // set initial data into repositories
-                    this.exchanges.set(exchanges);
+                    context._exchanges.set(exchanges);
 
                     // update the exchange communicator with the newest data
-                    this.exchangeCommunicator.update({
-                        exchanges: this.exchanges
+                    context._exchangeCommunicator.update({
+                        exchanges: context._exchanges
                     });
                 });
 
                 /**
                  * When changes are made to indicators (on message bus)
                  */
-                context.messageBus.onMessage('indicators', async (message) => {
-                    console.log('indicator update', message);
+                // context._messageBus.onMessage('indicators', async (message) => {
+                //     console.log('indicator update', message);
                     
-                    // TODO: update indicators without disconnecting exchange communicator
+                //     // TODO: update indicators without disconnecting exchange communicator
 
-                });
+                // });
 
+                /**
+                 * Start the exchange communicator
+                 */
+                 if(process.env.EXCHANGE_LISTENER !== 'false') {
+                    console.log('System: starting exchange communicator...');
+                    context._exchangeCommunicator.connect().then(() => {
+                        console.log('System: exchange communicator started');
+                    });
+                }
 
                 /**
                  * Connect to message bus
                  */
                 if(process.env.MESSAGE_BUS !== 'false') {
                     console.log('System: connecting to message bus...');
-                    context.messageBus.connect();
+                    context._messageBus.connect();
                 }
 
                 resolve(true);
             }
             catch(err) {
                 console.log('System error: ', err);
+                
+                console.log('System: wait 10 seconds before reconnecting...');
+                await sleep(10 * 1000);
+
+                if(process.env.EXCHANGE_LISTENER !== 'false') {
+                    console.log('System: reconnecting exchange communicator...');
+                    await context._exchangeCommunicator.disconnect();
+                    await context._exchangeCommunicator.connect();
+                    console.log('System: exchange communicator reconnected');
+                }
+    
+                if(process.env.SOCKET_GATEWAY !== 'false') {
+                    console.log('System: reconnecting socket gateway...');
+                    await context._socketServer.disconnect();
+                    await context._socketServer.connect(context._apiConnectToken);
+                    console.log('System: socket gateway reconnected');
+                }
+    
+                if(process.env.MESSAGE_BUS !== 'false') {
+                    console.log('System: reconnecting from message bus...');
+                    await context._messageBus.disconnect();
+                    await context._messageBus.connect();
+                    console.log('System: message bus reconnected');
+                }
+
                 resolve(false);
             }
         });
@@ -444,22 +480,24 @@ export default class System
      */
     async loadData()
     {
+        const context = this;
+
         try {
             console.log('System: loading data from api...');
 
-            const exchanges = await this.restAPI.getExchanges(); // get all supported exchanges from api
-            this.apiConnectToken = await this.restAPI.getAPIConnectToken();
+            const exchanges = await context._restAPI.getExchanges(); // get all supported exchanges from api
+            context._apiConnectToken = await context._restAPI.getAPIConnectToken();
 
-            console.log('System: API connect token loaded ', this.apiConnectToken);
+            console.log('System: API connect token loaded ', context._apiConnectToken);
             console.log('System: exchanges loaded: ', exchanges.length);
 
             // set initial data into repositories
-            this.exchanges.set(exchanges);
+            context._exchanges.set(exchanges);
 
             // update the exchange communicator with the newest data
             if(process.env.EXCHANGE_LISTENER !== 'false') {
-                this.exchangeCommunicator.update({
-                    exchanges: this.exchanges
+                context._exchangeCommunicator.update({
+                    exchanges: context._exchanges
                 });
             }
         }
@@ -477,11 +515,13 @@ export default class System
      */
     async stop()
     {   
+        const context = this;
+
         try {
             if(process.env.MESSAGE_BUS !== 'false') {
                 // let the service registry know that a micro-service is offline
                 console.log('System: updating service registry (SERVICE_OFFLINE)...');
-                await this.messageBus.sendEvent('service-registry', 'SERVICE_OFFLINE', {
+                await context._messageBus.sendEvent('service-registry', 'SERVICE_OFFLINE', {
                     instanceId: process.env.INSTANCE_ID,
                     serviceId:  process.env.SERVICE_ID
                 });
@@ -490,19 +530,19 @@ export default class System
 
             if(process.env.EXCHANGE_LISTENER !== 'false') {
                 console.log('System: disconnecting exchange communicator...');
-                await this.exchangeCommunicator.disconnect();
+                await context._exchangeCommunicator.disconnect();
                 console.log('System: exchange communicator disconnected');
             }
 
             if(process.env.SOCKET_GATEWAY !== 'false') {
                 console.log('System: disconnecting socket gateway...');
-                await this.socketServer.disconnect();
+                await context._socketServer.disconnect();
                 console.log('System: socket gateway disconnected');
             }
 
             if(process.env.MESSAGE_BUS !== 'false') {
                 console.log('System: disconnecting from message bus...');
-                await this.messageBus.disconnect();
+                await context._messageBus.disconnect();
                 console.log('System: message bus disconnected');
             }
         }

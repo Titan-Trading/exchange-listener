@@ -54,7 +54,8 @@ export default class SocketIOClient
             auth: {
                 token: accessToken
             },
-            parser: JsonParser
+            parser: JsonParser,
+            transports: [ "websocket" ]
         });
 
         this._client.on('connect', () => {

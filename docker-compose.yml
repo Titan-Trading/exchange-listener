@@ -11,7 +11,7 @@ services:
       dockerfile:  Dockerfile
     hostname: exchange-listener-1
     container_name: exchange-listener-1
-    restart: unless-stopped
+    restart: always
     tty: true
     env_file:
       - .one.env
