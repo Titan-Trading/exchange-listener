@@ -50,6 +50,12 @@ export default class AccountManager
             apiKeyPassphrase: this._account.api_key_passphrase,
             apiKeyVersion: this._account.api_version
         });
+        if(!initData) {
+            console.log('Unable to get private connection details');
+            return;
+        }
+
+        console.log(initData);
 
         const webSocketToken = initData.data.token;
         const webSocketHost = initData.data.instanceServers[0].endpoint;

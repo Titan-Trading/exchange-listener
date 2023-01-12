@@ -161,13 +161,10 @@ export default class ExchangeCommunicator
                     // check if exchange is supported
                     if(typeof ExchangeClient !== 'function') {
                         console.log('System: unsupported exchange: ' + exchange.name);
-
-
-
                         return;
                     }
 
-                    context._exchangeClients[exchange.name] = new ExchangeClient(context._restAPI, context._pubSub, exchange);
+                    context._exchangeClients[exchange.name] = new ExchangeClient(/*context._log,*/ context._restAPI, context._pubSub, exchange);
 
                     // initialize channels and accounts
                     context._exchangeClients[exchange.name].connect().then(() => {

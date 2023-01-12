@@ -4,6 +4,7 @@ import RestAPI from "../../../../utilities/RestAPI";
 import PubSub from "../../../../utilities/PubSub";
 import WebSocketClient from "../../../../utilities/WebSocketClient";
 import ExchangeClientInterface from "../ExchangeClientInterface";
+import Log from "../../../../utilities/Log";
 
 /**
  * Exchange client for communicating with KuCoin exchange
@@ -11,6 +12,7 @@ import ExchangeClientInterface from "../ExchangeClientInterface";
 
 export class ExchangeClient implements ExchangeClientInterface
 {
+    // private _log: Log;
     private _restAPI: RestAPI;
     private _eventBus: PubSub;
     private _isConnected: boolean = false;
@@ -21,8 +23,10 @@ export class ExchangeClient implements ExchangeClientInterface
     private _data: any;
     private _accountManagers: any;
 
-    constructor(restAPI: RestAPI, eventBus: PubSub, exchange: {id: number, name: string, symbol_template: string})
+    constructor(/*log: Log,*/ restAPI: RestAPI, eventBus: PubSub, exchange: {id: number, name: string, symbol_template: string})
     {
+        // this._log = log;
+
         this._restAPI = restAPI;
 
         this._eventBus = eventBus;

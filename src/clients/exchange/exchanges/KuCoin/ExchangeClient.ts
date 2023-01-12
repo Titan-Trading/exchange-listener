@@ -19,7 +19,7 @@ import Log from "../../../../utilities/Log";
 
 export class ExchangeClient implements ExchangeClientInterface
 {
-    private _log: Log;
+    // private _log: Log;
     private _restAPI: RestAPI;
     private _eventBus: PubSub;
     private _isConnected: boolean = false;
@@ -30,9 +30,9 @@ export class ExchangeClient implements ExchangeClientInterface
     private _data: any;
     private _accountManagers: any;
 
-    constructor(log: Log, restAPI: RestAPI, eventBus: PubSub, exchange: {id: number, name: string, symbol_template: string})
+    constructor(/*log: Log,*/ restAPI: RestAPI, eventBus: PubSub, exchange: {id: number, name: string, symbol_template: string})
     {
-        this._log = log;
+        // this._log = log;
 
         this._restAPI = restAPI;
 
@@ -62,10 +62,10 @@ export class ExchangeClient implements ExchangeClientInterface
         this._data.symbols = await this._restAPI.getTickerSymbols(this._exchange.id);
         this._data.accounts = await this._restAPI.getExchangeAccounts(this._exchange.id);
 
-        // console.log('Symbols loaded: ', this._data.symbols.length);
-        // console.log('Accounts loaded: ', this._data.accounts.length);
-        this._log.info(`System: ${this._data.symbols.length} symbols loaded for ${this._exchange.name}`);
-        this._log.info(`System: ${this._data.account.length} accounts loaded for ${this._exchange.name}`);
+        console.log('Symbols loaded: ', this._data.symbols.length);
+        console.log('Accounts loaded: ', this._data.accounts.length);
+        // this._log.info(`System: ${this._data.symbols.length} symbols loaded for ${this._exchange.name}`);
+        // this._log.info(`System: ${this._data.account.length} accounts loaded for ${this._exchange.name}`);
 
         /**
          * Create REST API client for exchange api
@@ -76,6 +76,12 @@ export class ExchangeClient implements ExchangeClientInterface
          * Get initial data from exchange api
          */
         const initData = await this._client.getInitialData();
+        if(!initData) {
+            console.log('Unable to get private connection details');
+            return;
+        }
+
+        console.log(initData);
 
         const webSocketToken = initData.data.token;
         const webSocketHost = initData.data.instanceServers[0].endpoint;
@@ -98,8 +104,8 @@ export class ExchangeClient implements ExchangeClientInterface
          * When successfully connect to websocket api
          */
         this._mainSocket.onConnect(() => {
-            // console.log('System: connected to ' + context._exchange.name);
-            this._log.info(`System: connected to ${context._exchange.name}`);
+            console.log('System: connected to ' + context._exchange.name);
+            // this._log.info(`System: connected to ${context._exchange.name}`);
 
             context._isConnected = true;
 
@@ -110,8 +116,8 @@ export class ExchangeClient implements ExchangeClientInterface
          * When disconnected from websocket api
          */
         this._mainSocket.onDisconnect(({code, reason}) => {
-            // console.log('System: disconnected from ' + context._exchange.name + ' : ' + reason + ' (' + code + ')');
-            this._log.info(`System: disconnected from ${context._exchange.name} : ${reason} (${code})`);
+            console.log('System: disconnected from ' + context._exchange.name + ' : ' + reason + ' (' + code + ')');
+            // this._log.info(`System: disconnected from ${context._exchange.name} : ${reason} (${code})`);
 
             context._isConnected = false;
 
@@ -183,16 +189,16 @@ export class ExchangeClient implements ExchangeClientInterface
          * - on channel message
          */
         this._channelManager.onConnect(({channel, message}) => {
-            // console.log('System: channel ' + channel.getName() + '(' + channel.getId() + ') connected');
-            this._log.info(`System: connected to ${channel.getName()} (${channel.getId()})`);
+            console.log('System: channel ' + channel.getName() + '(' + channel.getId() + ') connected');
+            // this._log.info(`System: connected to ${channel.getName()} (${channel.getId()})`);
         });
         this._channelManager.onError(({channel, error}) => {
-            // console.log('System: channel ' + channel.getName() + '(' + channel.getId() + ') error:', error);
-            this._log.info(`System: channel error: ${channel.getName()} (${channel.getId()}) error: ${JSON.stringify(error)}`);
+            console.log('System: channel ' + channel.getName() + '(' + channel.getId() + ') error:', error);
+            // this._log.info(`System: channel error: ${channel.getName()} (${channel.getId()}) error: ${JSON.stringify(error)}`);
         });
         this._channelManager.onDisconnect(({channel, message}) => {
-            // console.log('System: channel ' + channel.getName() + '(' + channel.getId() + ') disconnected');
-            this._log.info(`System: disconnected from ${channel.getName()} (${channel.getId()})`);
+            console.log('System: channel ' + channel.getName() + '(' + channel.getId() + ') disconnected');
+            // this._log.info(`System: disconnected from ${channel.getName()} (${channel.getId()})`);
         });
         this._channelManager.onMessage(({channel, message}) => {
             if(channel.getName() === 'allTicker') {
@@ -261,40 +267,40 @@ export class ExchangeClient implements ExchangeClientInterface
              * When account websocket is connected
              */
             accountManager.onAccountConnect(({accountId}) => {
-                // console.log('System: connected to account (' + accountId + ')');
-                this._log.info(`System: connected to ${context._exchange.name} account (${accountId})`);
+                console.log('System: connected to account (' + accountId + ')');
+                // this._log.info(`System: connected to ${context._exchange.name} account (${accountId})`);
             });
 
             /**
              * When account websocket is disconnected
              */
             accountManager.onAccountDisconnect(({accountId}) => {
-                // console.log('System: disconnected from account (' + accountId + ')');
-                this._log.info(`System: disconnected from ${context._exchange.name} account (${accountId})`);
+                console.log('System: disconnected from account (' + accountId + ')');
+                // this._log.info(`System: disconnected from ${context._exchange.name} account (${accountId})`);
             });
 
             /**
              * When account channel is subscribed
              */
             accountManager.onConnect(({accountId, channel, message}) => {
-                // console.log('System: account (' + accountId + ') channel ' + channel.getName() + ' (' + channel.getId() + ') connected');
-                this._log.info(`System: ${context._exchange.name} account (${accountId}) channel ${channel.getName()} (${channel.getId()}) connected`);
+                console.log('System: account (' + accountId + ') channel ' + channel.getName() + ' (' + channel.getId() + ') connected');
+                // this._log.info(`System: ${context._exchange.name} account (${accountId}) channel ${channel.getName()} (${channel.getId()}) connected`);
             });
 
             /**
              * When account channel is unsubscribed
              */
             accountManager.onDisconnect(({accountId, channel, message}) => {
-                // console.log('System: account (' + accountId + ') channel ' + channel.getName() + ' (' + channel.getId() + ') disconnected');
-                this._log.info(`System: ${context._exchange.name} account (${accountId}) channel ${channel.getName()} (${channel.getId()}) disconnected`);
+                console.log('System: account (' + accountId + ') channel ' + channel.getName() + ' (' + channel.getId() + ') disconnected');
+                // this._log.info(`System: ${context._exchange.name} account (${accountId}) channel ${channel.getName()} (${channel.getId()}) disconnected`);
             });
 
             /**
              * When account channel error
              */
             accountManager.onError(({accountId, channel, error}) => {
-                // console.log('System: account (' + accountId + ') channel ' + channel.getName() + ' (' + channel.getId() + ') error:', error);
-                this._log.info(`System: ${context._exchange.name} account (${accountId}) channel ${channel.getName()} (${channel.getId()}) error: ${JSON.stringify(error)}`);
+                console.log('System: account (' + accountId + ') channel ' + channel.getName() + ' (' + channel.getId() + ') error:', error);
+                // this._log.info(`System: ${context._exchange.name} account (${accountId}) channel ${channel.getName()} (${channel.getId()}) error: ${JSON.stringify(error)}`);
             });
 
             /**
@@ -358,8 +364,8 @@ export class ExchangeClient implements ExchangeClientInterface
                         }, webSocketPingTimeout);
                     }
                     catch(ex) {
-                        // console.log('System: exchange disconnected on error:', ex);
-                        this._log.info(`System: exchange (${context._exchange.name}) disconnected on error: ${JSON.stringify(ex)}`);
+                        console.log('System: exchange disconnected on error:', ex);
+                        // this._log.info(`System: exchange (${context._exchange.name}) disconnected on error: ${JSON.stringify(ex)}`);
 
                         clearInterval(pingTimer);
                         pingTimer = null;
@@ -471,40 +477,40 @@ export class ExchangeClient implements ExchangeClientInterface
                  * When account websocket is connected
                  */
                 accountManager.onAccountConnect(({accountId}) => {
-                    // console.log('System: connected to account (' + accountId + ')');
-                    this._log.info(`System: connected to ${context._exchange.name} account (${accountId})`);
+                    console.log('System: connected to account (' + accountId + ')');
+                    // this._log.info(`System: connected to ${context._exchange.name} account (${accountId})`);
                 });
 
                 /**
                  * When account websocket is disconnected
                  */
                 accountManager.onAccountDisconnect(({accountId}) => {
-                    // console.log('System: disconnected from account (' + accountId + ')');
-                    this._log.info(`System: disconnected from ${context._exchange.name} account (${accountId})`);
+                    console.log('System: disconnected from account (' + accountId + ')');
+                    // this._log.info(`System: disconnected from ${context._exchange.name} account (${accountId})`);
                 });
 
                 /**
                  * When account channel is subscribed
                  */
                 accountManager.onConnect(({accountId, channel, message}) => {
-                    // console.log('System: account (' + accountId + ') channel ' + channel.getName() + ' (' + channel.getId() + ') connected');
-                    this._log.info(`System: ${context._exchange.name} account (${accountId}) channel ${channel.getName()} (${channel.getId()}) connected`);
+                    console.log('System: account (' + accountId + ') channel ' + channel.getName() + ' (' + channel.getId() + ') connected');
+                    // this._log.info(`System: ${context._exchange.name} account (${accountId}) channel ${channel.getName()} (${channel.getId()}) connected`);
                 });
 
                 /**
                  * When account channel is unsubscribed
                  */
                 accountManager.onDisconnect(({accountId, channel, message}) => {
-                    // console.log('System: account (' + accountId + ') channel ' + channel.getName() + ' (' + channel.getId() + ') disconnected');
-                    this._log.info(`System: ${context._exchange.name} account (${accountId}) channel ${channel.getName()} (${channel.getId()}) disconnected`);
+                    console.log('System: account (' + accountId + ') channel ' + channel.getName() + ' (' + channel.getId() + ') disconnected');
+                    // this._log.info(`System: ${context._exchange.name} account (${accountId}) channel ${channel.getName()} (${channel.getId()}) disconnected`);
                 });
 
                 /**
                  * When account channel error
                  */
                 accountManager.onError(({accountId, channel, error}) => {
-                    // console.log('System: account (' + accountId + ') channel ' + channel.getName() + ' (' + channel.getId() + ') error:', error);
-                    this._log.info(`System: ${context._exchange.name} account (${accountId}) channel ${channel.getName()} (${channel.getId()}) error: ${JSON.stringify(error)}`);
+                    console.log('System: account (' + accountId + ') channel ' + channel.getName() + ' (' + channel.getId() + ') error:', error);
+                    // this._log.info(`System: ${context._exchange.name} account (${accountId}) channel ${channel.getName()} (${channel.getId()}) error: ${JSON.stringify(error)}`);
                 });
 
                 /**
@@ -558,8 +564,8 @@ export class ExchangeClient implements ExchangeClientInterface
      */
     disconnect()
     {
-        // console.log('exchange connection closed by client');
-        this._log.info(`System: exchange (${this._exchange.name}) connection closed by client`);
+        console.log('exchange connection closed by client');
+        // this._log.info(`System: exchange (${this._exchange.name}) connection closed by client`);
 
         for(let iAccount in this._accountManagers) {
             this._accountManagers[iAccount].disconnect();
