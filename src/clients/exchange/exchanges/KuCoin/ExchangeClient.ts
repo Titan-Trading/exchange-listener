@@ -76,8 +76,9 @@ export class ExchangeClient implements ExchangeClientInterface
          * Get initial data from exchange api
          */
         const initData = await this._client.getInitialData();
-        if(!initData) {
-            console.log('Unable to get private connection details');
+
+        if(!initData || initData.code !== '200000') {
+            // console.log('Unable to get private connection details');
             return;
         }
 
@@ -141,7 +142,7 @@ export class ExchangeClient implements ExchangeClientInterface
 
             // TEMP SKIP ALL SYMBOLS BUT THE ONE WE USE!!!
             if(exchangeSymbol !== 'BTC-USDT') {
-                continue;
+                // continue;
             }
 
             /**

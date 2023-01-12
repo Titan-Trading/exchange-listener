@@ -50,8 +50,11 @@ export default class AccountManager
             apiKeyPassphrase: this._account.api_key_passphrase,
             apiKeyVersion: this._account.api_version
         });
-        if(!initData) {
-            console.log('Unable to get private connection details');
+
+        // console.log(initData);
+
+        if(!initData || initData.code !== '200000') {
+            // console.log('Unable to get private connection details');
             return;
         }
 

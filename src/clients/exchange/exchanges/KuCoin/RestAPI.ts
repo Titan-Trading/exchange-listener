@@ -56,7 +56,7 @@ export default class KuCoinRestAPI
             const encryptedPassphrase = crypto.createHmac('sha256', config.apiKeySecret).update(config.apiKeyPassphrase).digest('base64');
             // console.log(encryptedPassphrase);
 
-            const res = await axios.post(this.baseURL + '/api/v1/bullet-private', '', {
+            const res = await axios.post(this.baseURL + '/api/v1/bullet-private', null, {
                 headers: {
                     'KC-API-KEY': config.apiKey,
                     'KC-API-SIGN': signature,
@@ -66,14 +66,12 @@ export default class KuCoinRestAPI
                 }
             });
 
-            if(!res || !res.data) {
-                return null;
-            }
+            // console.log(res.data);
 
             return res.data;
         }
         catch(err) {
-            console.error(err);
+            console.log(err);
 
             return null;
         }

@@ -124,6 +124,11 @@ export default class ExchangeCommunicator
         for(let iExchange in exchanges) {
             const exchange = exchanges[iExchange];
 
+            // skip simple trader exchange for now
+            if(exchange.name === 'SimpleTrader') {
+                continue;
+            }
+
             /**
              * If exchange client already exists
              */
