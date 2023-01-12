@@ -81,7 +81,7 @@ export class ExchangeClient implements ExchangeClientInterface
             return;
         }
 
-        console.log(initData);
+        // console.log(initData);
 
         const webSocketToken = initData.data.token;
         const webSocketHost = initData.data.instanceServers[0].endpoint;
@@ -163,23 +163,23 @@ export class ExchangeClient implements ExchangeClientInterface
         /**
          * Level 2 depth chart / orderbook
          */
-        /*this._channelManager.addChannel(new OrderBookChannel('level2OrderBook', {
+        this._channelManager.addChannel(new OrderBookChannel('level2OrderBook', {
             topic: '/spotMarket/level2Depth50:' + allSymbolsString
-        }, this._mainSocket));*/
+        }, this._mainSocket));
 
         /**
          * Level 3 match execution data
          */
-        /*this._channelManager.addChannel(new MatchExecutionChannel('level3MatchData', {
+        this._channelManager.addChannel(new MatchExecutionChannel('level3MatchData', {
             topic: '/market/match:' + allSymbolsString
-        }, this._mainSocket));*/
+        }, this._mainSocket));
 
         /**
          * Subscribe to all symbol ticker
          */
-        /*this._channelManager.addChannel(new TickerChannel('allTicker', {
+        this._channelManager.addChannel(new TickerChannel('allTicker', {
             topic: '/market/ticker:all'
-        }, this._mainSocket));*/
+        }, this._mainSocket));
 
         /**
          * Setup events for channel manager
@@ -435,7 +435,7 @@ export class ExchangeClient implements ExchangeClientInterface
         /**
          * Level 2 depth chart / orderbook
          */
-        /*if(symbols.length !== this._data.symbols) {
+        if(symbols.length !== this._data.symbols) {
             this._channelManager.removeChannel('level2OrderBook');
 
             this._channelManager.addChannel(new OrderBookChannel('level2OrderBook', {
@@ -443,12 +443,12 @@ export class ExchangeClient implements ExchangeClientInterface
             }, this._mainSocket));
 
             this._channelManager.connectChannels('level2OrderBook');
-        }*/
+        }
 
         /**
          * Level 3 match execution data
          */
-        /*if(symbols.length !== this._data.symbols) {
+        if(symbols.length !== this._data.symbols) {
             this._channelManager.removeChannel('level3MatchData');
 
             this._channelManager.addChannel(new OrderBookChannel('level3MatchData', {
@@ -456,7 +456,7 @@ export class ExchangeClient implements ExchangeClientInterface
             }, this._mainSocket));
 
             this._channelManager.connectChannels('level3MatchData');
-        }*/
+        }
 
 
         /**

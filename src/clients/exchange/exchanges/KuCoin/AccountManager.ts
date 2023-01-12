@@ -55,7 +55,7 @@ export default class AccountManager
             return;
         }
 
-        console.log(initData);
+        // console.log(initData);
 
         const webSocketToken = initData.data.token;
         const webSocketHost = initData.data.instanceServers[0].endpoint;
