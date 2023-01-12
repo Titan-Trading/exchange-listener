@@ -15,19 +15,22 @@
 import RestAPI from "../../utilities/RestAPI";
 import PubSub from "../../utilities/PubSub";
 import Exchanges from "../../repositories/Exchanges";
+import Log from "../../utilities/Log";
 
 export default class ExchangeCommunicator
 {
+    _log: Log;
     _restAPI: RestAPI;
-    _eventBus: PubSub;
-    private _repos: {exchanges: Exchanges};
+    _pubSub: PubSub;
     _exchangeClients: any;
+    private _repos: {exchanges: Exchanges};
 
-    constructor(restAPI: RestAPI)
+    constructor(log: Log, restAPI: RestAPI)
     {
+        this._log = log;
         this._restAPI = restAPI;
 
-        this._eventBus = new PubSub();
+        this._pubSub = new PubSub();
 
         this._exchangeClients = {};
     }
@@ -50,10 +53,14 @@ export default class ExchangeCommunicator
         for(let iExchange in exchanges) {
             const exchange = exchanges[iExchange];
 
-            const exchangeClientPromise = new Promise(async (resolve, reject) => {
+            // skip simple trader exchange for now
+            if(exchange.name === 'SimpleTrader') {
+                continue;
+            }
 
+            const exchangeClientPromise = new Promise(async (resolve, reject) => {
                 // use a exchange client instance to setup the rest and socket api, if one is found for the given exchange
-                import('./exchanges/' + exchange.name + '/ExchangeClient').then(({ExchangeClient}) => {
+                import(__dirname + '/exchanges/' + exchange.name + '/ExchangeClient').then(({ExchangeClient}) => {
 
                     // check if exchange is supported
                     if(typeof ExchangeClient !== 'function') {
@@ -65,7 +72,9 @@ export default class ExchangeCommunicator
                         });
                     }
 
-                    context._exchangeClients[exchange.name] = new ExchangeClient(context._restAPI, context._eventBus, exchange);
+                    // TODO: get different rest api classes for different exchanges
+
+                    context._exchangeClients[exchange.name] = new ExchangeClient(context._restAPI, context._pubSub, exchange);
 
                     // initialize channels and accounts
                     context._exchangeClients[exchange.name].connect().then(() => {
@@ -94,7 +103,7 @@ export default class ExchangeCommunicator
 
             // emit on connect if all exchanges are connected successfully
             if(exchangesConnected === exchangeClientResults.length) {
-                context._eventBus.emit('onConnect', exchangeClientResults);
+                context._pubSub.emit('onConnect', exchangeClientResults);
             }
         });
     }
@@ -147,16 +156,18 @@ export default class ExchangeCommunicator
              */
             else {
                 // use a exchange client instance to setup the rest and socket api, if one is found for the given exchange
-                import('./exchanges/' + exchange.name + '/ExchangeClient').then(({ExchangeClient}) => {
+                import(__dirname + '/exchanges/' + exchange.name + '/ExchangeClient').then(({ExchangeClient}) => {
 
                     // check if exchange is supported
                     if(typeof ExchangeClient !== 'function') {
                         console.log('System: unsupported exchange: ' + exchange.name);
 
+
+
                         return;
                     }
 
-                    context._exchangeClients[exchange.name] = new ExchangeClient(context._restAPI, context._eventBus, exchange);
+                    context._exchangeClients[exchange.name] = new ExchangeClient(context._restAPI, context._pubSub, exchange);
 
                     // initialize channels and accounts
                     context._exchangeClients[exchange.name].connect().then(() => {
@@ -177,7 +188,7 @@ export default class ExchangeCommunicator
             this._exchangeClients[eSI].disconnect();
         }
 
-        this._eventBus.emit('onDisconnect', {});
+        this._pubSub.emit('onDisconnect', {});
     }
 
     /**
@@ -186,7 +197,7 @@ export default class ExchangeCommunicator
      */
     onConnect(callback: () => void)
     {
-        this._eventBus.on('onConnect', callback);
+        this._pubSub.on('onConnect', callback);
     }
 
     /**
@@ -195,7 +206,7 @@ export default class ExchangeCommunicator
      */
     onDisconnect(callback: () => void)
     {
-        this._eventBus.on('onDisconnect', callback);
+        this._pubSub.on('onDisconnect', callback);
     }
 
     /**
@@ -204,7 +215,7 @@ export default class ExchangeCommunicator
      */
     onExchangeConnect(callback: (exchangeName: string) => void)
     {
-        this._eventBus.on('onExchangeConnect', ({exchangeName}) => callback(exchangeName));
+        this._pubSub.on('onExchangeConnect', ({exchangeName}) => callback(exchangeName));
     }
 
     /**
@@ -213,7 +224,7 @@ export default class ExchangeCommunicator
      */
     onExchangeDisconnect(callback: (exchangeName: string, code: string, reason: string) => void)
     {
-        this._eventBus.on('onExchangeDisconnect', ({exchangeName, code, reason}) => callback(exchangeName, code, reason));
+        this._pubSub.on('onExchangeDisconnect', ({exchangeName, code, reason}) => callback(exchangeName, code, reason));
     }
 
     /**
@@ -223,7 +234,7 @@ export default class ExchangeCommunicator
      */
     onTickerUpdate(callback: (exchange: string, symbol: string, data: any) => void): void
     {
-        this._eventBus.on('onTickerUpdate', (eventData) => {
+        this._pubSub.on('onTickerUpdate', (eventData) => {
             callback(eventData.exchangeName, eventData.symbol, eventData.data)
         });
     }
@@ -235,7 +246,7 @@ export default class ExchangeCommunicator
      */
     onKlineUpdate(callback: (exchange: string, interval: string, symbol: string, data: any) => void): void
     {
-        this._eventBus.on('onKlineUpdate', (eventData) => {
+        this._pubSub.on('onKlineUpdate', (eventData) => {
             callback(eventData.exchangeName, eventData.interval, eventData.symbol, eventData.data)
         });
     }
@@ -247,7 +258,7 @@ export default class ExchangeCommunicator
      */
     onOrderBookUpdate(callback: (exchange: string, symbol: string, data: any) => void): void
     {
-        this._eventBus.on('onOrderBookUpdate', (eventData) => {
+        this._pubSub.on('onOrderBookUpdate', (eventData) => {
             callback(eventData.exchangeName, eventData.symbol, eventData.data)
         });
     }
@@ -259,7 +270,7 @@ export default class ExchangeCommunicator
      */
     onOrderUpdate(callback: (exchange: string, symbol: string, data: any) => void): void
     {
-        this._eventBus.on('onOrderUpdate', (eventData) => {
+        this._pubSub.on('onOrderUpdate', (eventData) => {
             callback(eventData.exchangeName, eventData.symbol, eventData.data)
         });
     }
@@ -271,7 +282,7 @@ export default class ExchangeCommunicator
      */
     onAccountTradeUpdate(callback: (exchange: string, accountId: string, data: any) => void): void
     {
-        this._eventBus.on('onAccountTradeUpdate', (eventData) => {
+        this._pubSub.on('onAccountTradeUpdate', (eventData) => {
             callback(eventData.exchangeName, eventData.accountId, eventData.data)
         });
     }
@@ -283,7 +294,7 @@ export default class ExchangeCommunicator
      */
     onAccountBalanceUpdate(callback: (exchange: string, accountId: string, data: any) => void): void
     {
-        this._eventBus.on('onAccountBalanceUpdate', (eventData) => {
+        this._pubSub.on('onAccountBalanceUpdate', (eventData) => {
             callback(eventData.exchangeName, eventData.accountId, eventData.data)
         });
     }

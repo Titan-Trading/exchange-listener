@@ -11,6 +11,7 @@ import KlineChannel from "./channel_types/KlineChannel";
 import OrderBookChannel from "./channel_types/OrderBookChannel";
 import TickerChannel from "./channel_types/TickerChannel";
 import MatchExecutionChannel from "./channel_types/MatchExecutionChannel";
+import Log from "../../../../utilities/Log";
 
 /**
  * Exchange client for communicating with KuCoin exchange
@@ -18,6 +19,7 @@ import MatchExecutionChannel from "./channel_types/MatchExecutionChannel";
 
 export class ExchangeClient implements ExchangeClientInterface
 {
+    private _log: Log;
     private _restAPI: RestAPI;
     private _eventBus: PubSub;
     private _isConnected: boolean = false;
@@ -28,8 +30,10 @@ export class ExchangeClient implements ExchangeClientInterface
     private _data: any;
     private _accountManagers: any;
 
-    constructor(restAPI: RestAPI, eventBus: PubSub, exchange: {id: number, name: string, symbol_template: string})
+    constructor(log: Log, restAPI: RestAPI, eventBus: PubSub, exchange: {id: number, name: string, symbol_template: string})
     {
+        this._log = log;
+
         this._restAPI = restAPI;
 
         this._eventBus = eventBus;
@@ -58,8 +62,10 @@ export class ExchangeClient implements ExchangeClientInterface
         this._data.symbols = await this._restAPI.getTickerSymbols(this._exchange.id);
         this._data.accounts = await this._restAPI.getExchangeAccounts(this._exchange.id);
 
-        console.log('Symbols loaded: ', this._data.symbols.length);
-        console.log('Accounts loaded: ', this._data.accounts.length);
+        // console.log('Symbols loaded: ', this._data.symbols.length);
+        // console.log('Accounts loaded: ', this._data.accounts.length);
+        this._log.info(`System: ${this._data.symbols.length} symbols loaded for ${this._exchange.name}`);
+        this._log.info(`System: ${this._data.account.length} accounts loaded for ${this._exchange.name}`);
 
         /**
          * Create REST API client for exchange api
@@ -92,7 +98,8 @@ export class ExchangeClient implements ExchangeClientInterface
          * When successfully connect to websocket api
          */
         this._mainSocket.onConnect(() => {
-            console.log('System: connected to ' + context._exchange.name);
+            // console.log('System: connected to ' + context._exchange.name);
+            this._log.info(`System: connected to ${context._exchange.name}`);
 
             context._isConnected = true;
 
@@ -103,7 +110,8 @@ export class ExchangeClient implements ExchangeClientInterface
          * When disconnected from websocket api
          */
         this._mainSocket.onDisconnect(({code, reason}) => {
-            console.log('System: disconnected from ' + context._exchange.name + ' : ' + reason + ' (' + code + ')');
+            // console.log('System: disconnected from ' + context._exchange.name + ' : ' + reason + ' (' + code + ')');
+            this._log.info(`System: disconnected from ${context._exchange.name} : ${reason} (${code})`);
 
             context._isConnected = false;
 
@@ -125,6 +133,11 @@ export class ExchangeClient implements ExchangeClientInterface
 
             const exchangeSymbol = getTickerSymbol(this._exchange, symbol);
 
+            // TEMP SKIP ALL SYMBOLS BUT THE ONE WE USE!!!
+            if(exchangeSymbol !== 'BTC-USDT') {
+                continue;
+            }
+
             /**
              * Klines channels
              */
@@ -144,23 +157,23 @@ export class ExchangeClient implements ExchangeClientInterface
         /**
          * Level 2 depth chart / orderbook
          */
-        this._channelManager.addChannel(new OrderBookChannel('level2OrderBook', {
+        /*this._channelManager.addChannel(new OrderBookChannel('level2OrderBook', {
             topic: '/spotMarket/level2Depth50:' + allSymbolsString
-        }, this._mainSocket));
+        }, this._mainSocket));*/
 
         /**
          * Level 3 match execution data
          */
-         this._channelManager.addChannel(new MatchExecutionChannel('level3MatchData', {
+        /*this._channelManager.addChannel(new MatchExecutionChannel('level3MatchData', {
             topic: '/market/match:' + allSymbolsString
-        }, this._mainSocket));
+        }, this._mainSocket));*/
 
         /**
          * Subscribe to all symbol ticker
          */
-        this._channelManager.addChannel(new TickerChannel('allTicker', {
+        /*this._channelManager.addChannel(new TickerChannel('allTicker', {
             topic: '/market/ticker:all'
-        }, this._mainSocket));
+        }, this._mainSocket));*/
 
         /**
          * Setup events for channel manager
@@ -170,13 +183,16 @@ export class ExchangeClient implements ExchangeClientInterface
          * - on channel message
          */
         this._channelManager.onConnect(({channel, message}) => {
-            console.log('System: channel ' + channel.getName() + '(' + channel.getId() + ') connected');
+            // console.log('System: channel ' + channel.getName() + '(' + channel.getId() + ') connected');
+            this._log.info(`System: connected to ${channel.getName()} (${channel.getId()})`);
         });
         this._channelManager.onError(({channel, error}) => {
-            console.log('System: channel ' + channel.getName() + '(' + channel.getId() + ') error:', error);
+            // console.log('System: channel ' + channel.getName() + '(' + channel.getId() + ') error:', error);
+            this._log.info(`System: channel error: ${channel.getName()} (${channel.getId()}) error: ${JSON.stringify(error)}`);
         });
         this._channelManager.onDisconnect(({channel, message}) => {
-            console.log('System: channel ' + channel.getName() + '(' + channel.getId() + ') disconnected');
+            // console.log('System: channel ' + channel.getName() + '(' + channel.getId() + ') disconnected');
+            this._log.info(`System: disconnected from ${channel.getName()} (${channel.getId()})`);
         });
         this._channelManager.onMessage(({channel, message}) => {
             if(channel.getName() === 'allTicker') {
@@ -245,35 +261,40 @@ export class ExchangeClient implements ExchangeClientInterface
              * When account websocket is connected
              */
             accountManager.onAccountConnect(({accountId}) => {
-                console.log('System: connected to account (' + accountId + ')');
+                // console.log('System: connected to account (' + accountId + ')');
+                this._log.info(`System: connected to ${context._exchange.name} account (${accountId})`);
             });
 
             /**
              * When account websocket is disconnected
              */
             accountManager.onAccountDisconnect(({accountId}) => {
-                console.log('System: disconnected from account (' + accountId + ')');
+                // console.log('System: disconnected from account (' + accountId + ')');
+                this._log.info(`System: disconnected from ${context._exchange.name} account (${accountId})`);
             });
 
             /**
              * When account channel is subscribed
              */
             accountManager.onConnect(({accountId, channel, message}) => {
-                console.log('System: account (' + accountId + ') channel ' + channel.getName() + ' (' + channel.getId() + ') connected');
+                // console.log('System: account (' + accountId + ') channel ' + channel.getName() + ' (' + channel.getId() + ') connected');
+                this._log.info(`System: ${context._exchange.name} account (${accountId}) channel ${channel.getName()} (${channel.getId()}) connected`);
             });
 
             /**
              * When account channel is unsubscribed
              */
             accountManager.onDisconnect(({accountId, channel, message}) => {
-                console.log('System: account (' + accountId + ') channel ' + channel.getName() + ' (' + channel.getId() + ') disconnected');
+                // console.log('System: account (' + accountId + ') channel ' + channel.getName() + ' (' + channel.getId() + ') disconnected');
+                this._log.info(`System: ${context._exchange.name} account (${accountId}) channel ${channel.getName()} (${channel.getId()}) disconnected`);
             });
 
             /**
              * When account channel error
              */
             accountManager.onError(({accountId, channel, error}) => {
-                console.log('System: account (' + accountId + ') channel ' + channel.getName() + ' (' + channel.getId() + ') error:', error);
+                // console.log('System: account (' + accountId + ') channel ' + channel.getName() + ' (' + channel.getId() + ') error:', error);
+                this._log.info(`System: ${context._exchange.name} account (${accountId}) channel ${channel.getName()} (${channel.getId()}) error: ${JSON.stringify(error)}`);
             });
 
             /**
@@ -337,7 +358,8 @@ export class ExchangeClient implements ExchangeClientInterface
                         }, webSocketPingTimeout);
                     }
                     catch(ex) {
-                        console.log('System: exchange disconnected on error:', ex);
+                        // console.log('System: exchange disconnected on error:', ex);
+                        this._log.info(`System: exchange (${context._exchange.name}) disconnected on error: ${JSON.stringify(ex)}`);
 
                         clearInterval(pingTimer);
                         pingTimer = null;
@@ -407,7 +429,7 @@ export class ExchangeClient implements ExchangeClientInterface
         /**
          * Level 2 depth chart / orderbook
          */
-        if(symbols.length !== this._data.symbols) {
+        /*if(symbols.length !== this._data.symbols) {
             this._channelManager.removeChannel('level2OrderBook');
 
             this._channelManager.addChannel(new OrderBookChannel('level2OrderBook', {
@@ -415,12 +437,12 @@ export class ExchangeClient implements ExchangeClientInterface
             }, this._mainSocket));
 
             this._channelManager.connectChannels('level2OrderBook');
-        }
+        }*/
 
         /**
          * Level 3 match execution data
          */
-         if(symbols.length !== this._data.symbols) {
+        /*if(symbols.length !== this._data.symbols) {
             this._channelManager.removeChannel('level3MatchData');
 
             this._channelManager.addChannel(new OrderBookChannel('level3MatchData', {
@@ -428,7 +450,7 @@ export class ExchangeClient implements ExchangeClientInterface
             }, this._mainSocket));
 
             this._channelManager.connectChannels('level3MatchData');
-        }
+        }*/
 
 
         /**
@@ -449,35 +471,40 @@ export class ExchangeClient implements ExchangeClientInterface
                  * When account websocket is connected
                  */
                 accountManager.onAccountConnect(({accountId}) => {
-                    console.log('System: connected to account (' + accountId + ')');
+                    // console.log('System: connected to account (' + accountId + ')');
+                    this._log.info(`System: connected to ${context._exchange.name} account (${accountId})`);
                 });
 
                 /**
                  * When account websocket is disconnected
                  */
                 accountManager.onAccountDisconnect(({accountId}) => {
-                    console.log('System: disconnected from account (' + accountId + ')');
+                    // console.log('System: disconnected from account (' + accountId + ')');
+                    this._log.info(`System: disconnected from ${context._exchange.name} account (${accountId})`);
                 });
 
                 /**
                  * When account channel is subscribed
                  */
                 accountManager.onConnect(({accountId, channel, message}) => {
-                    console.log('System: account (' + accountId + ') channel ' + channel.getName() + ' (' + channel.getId() + ') connected');
+                    // console.log('System: account (' + accountId + ') channel ' + channel.getName() + ' (' + channel.getId() + ') connected');
+                    this._log.info(`System: ${context._exchange.name} account (${accountId}) channel ${channel.getName()} (${channel.getId()}) connected`);
                 });
 
                 /**
                  * When account channel is unsubscribed
                  */
                 accountManager.onDisconnect(({accountId, channel, message}) => {
-                    console.log('System: account (' + accountId + ') channel ' + channel.getName() + ' (' + channel.getId() + ') disconnected');
+                    // console.log('System: account (' + accountId + ') channel ' + channel.getName() + ' (' + channel.getId() + ') disconnected');
+                    this._log.info(`System: ${context._exchange.name} account (${accountId}) channel ${channel.getName()} (${channel.getId()}) disconnected`);
                 });
 
                 /**
                  * When account channel error
                  */
                 accountManager.onError(({accountId, channel, error}) => {
-                    console.log('System: account (' + accountId + ') channel ' + channel.getName() + ' (' + channel.getId() + ') error:', error);
+                    // console.log('System: account (' + accountId + ') channel ' + channel.getName() + ' (' + channel.getId() + ') error:', error);
+                    this._log.info(`System: ${context._exchange.name} account (${accountId}) channel ${channel.getName()} (${channel.getId()}) error: ${JSON.stringify(error)}`);
                 });
 
                 /**
@@ -531,7 +558,8 @@ export class ExchangeClient implements ExchangeClientInterface
      */
     disconnect()
     {
-        console.log('exchange connection closed by client');
+        // console.log('exchange connection closed by client');
+        this._log.info(`System: exchange (${this._exchange.name}) connection closed by client`);
 
         for(let iAccount in this._accountManagers) {
             this._accountManagers[iAccount].disconnect();

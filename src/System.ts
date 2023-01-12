@@ -6,6 +6,7 @@ import Exchanges from './repositories/Exchanges';
 import MessageBus from './utilities/MessageBus';
 import SocketIOClient from './utilities/SocketIOClient';
 import { sleep } from './utilities/helpers';
+import Log from './utilities/Log';
 
 
 /**
@@ -14,6 +15,7 @@ import { sleep } from './utilities/helpers';
 
 export default class System
 {
+    private _log: Log;
     private _messageBus: MessageBus;
     private _restAPI: RestAPI;
     private _apiConnectToken: string;
@@ -46,7 +48,10 @@ export default class System
         this._restAPI = new RestAPI(restAPIURL, restAPIKey, restAPIKeySecret);
 
         // create exchange communicator instance
-        this._exchangeCommunicator = new ExchangeCommunicator(this._restAPI);
+        this._exchangeCommunicator = new ExchangeCommunicator(this._log, this._restAPI);
+
+        // create log client instance
+        this._log = new Log(this._messageBus);
 
         // create a write API, expecting point timestamps in nanoseconds (can be also 's', 'ms', 'us')
         if(this._logData !== 'false') {
@@ -157,7 +162,7 @@ export default class System
                  */
                 context._exchangeCommunicator.onKlineUpdate((exchange, interval, symbol, data) => {
                     // store in time series database (once a second)
-                    if(context._logData !== 'false') {
+                    /*if(context._logData !== 'false') {
                         const point = new Point('klines')
                         .tag('exchange', exchange)
                         .tag('symbol', symbol)
@@ -172,7 +177,7 @@ export default class System
                         .timestamp(new Date(data.timestamp));
                     
                         context._influxWrite.writePoint(point);
-                    }
+                    }*/
 
                     // notify web and mobile clients (web socket)
                     context._socketServer.sendMessage({
@@ -197,8 +202,8 @@ export default class System
                  */
                 context._exchangeCommunicator.onOrderBookUpdate((exchange, symbol, data) => {
                     // store in time series database
-                    if(context._logData !== 'false') {
-                        /*const point = new Point('orderbook_data')
+                    /*if(context._logData !== 'false') {
+                        const point = new Point('orderbook_data')
                         .tag('exchange', exchange)
                         .tag('symbol', symbol)
                         .tag('interval', '100ms')
@@ -209,8 +214,8 @@ export default class System
                         .floatField('volume', parseFloat(data.size))
                         .timestamp(new Date(data.timestamp));
                     
-                        context.influxWrite.writePoint(point);*/
-                    }
+                        context.influxWrite.writePoint(point);
+                    }*/
 
                     // notify web and mobile clients (web socket)
                     context._socketServer.sendMessage({
@@ -275,7 +280,7 @@ export default class System
                  */
                 context._exchangeCommunicator.onAccountTradeUpdate((exchange, accountId, data) => {
                     // store in time series database
-                    if(context._logData !== 'false') {
+                    /*if(context._logData !== 'false') {
                         const point = new Point('account_trade_data')
                         .tag('exchange', exchange)
                         .tag('accountId', accountId)
@@ -293,7 +298,7 @@ export default class System
                         .timestamp(new Date(data.timestamp));
                     
                         context._influxWrite.writePoint(point);
-                    }
+                    }*/
 
                     // notify specific web and mobile clients (web socket)
                     context._socketServer.sendMessage({
@@ -318,7 +323,7 @@ export default class System
                  */
                 context._exchangeCommunicator.onAccountBalanceUpdate((exchange, accountId, data) => {
                     // store in time series database
-                    if(context._logData !== 'false') {
+                    /*if(context._logData !== 'false') {
                         const point = new Point('account_balance_data')
                         .tag('exchange', exchange)
                         .tag('accountId', accountId)
@@ -332,7 +337,7 @@ export default class System
                         .timestamp(new Date(data.timestamp));
                     
                         context._influxWrite.writePoint(point);
-                    }
+                    }*/
 
                     // notify specific web and mobile clients (web socket)
                     context._socketServer.sendMessage({

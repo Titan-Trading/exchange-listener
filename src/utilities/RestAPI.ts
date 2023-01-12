@@ -40,7 +40,7 @@ export default class RestAPI extends RestClient
      */
     async getTickerSymbols(exchangeId: number)
     {
-        const res = await this.client.get(this.baseURL + '/admin/trading/symbols', {exchange_id: exchangeId});
+        const res = await this.client.get(this.baseURL + '/admin/trading/symbols', {params: {exchange_id: exchangeId}});
 
         if(!res || !res.data) {
             return [];
@@ -68,7 +68,7 @@ export default class RestAPI extends RestClient
      */
     async getExchangeAccounts(exchangeId: number)
     {
-        const res = await this.client.get(this.baseURL + '/admin/trading/exchange-accounts', {exchange_id: exchangeId});
+        const res = await this.client.get(this.baseURL + '/admin/trading/exchange-accounts', {params: {exchange_id: exchangeId}});
  
         if(!res || !res.data) {
             return [];

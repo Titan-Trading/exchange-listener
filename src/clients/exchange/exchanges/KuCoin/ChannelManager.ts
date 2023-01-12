@@ -160,7 +160,7 @@ export default class ChannelManager
     /**
      * When a channel is connected
      */
-    onConnect(callback: ({channel: Channel, message: any}) => void)
+    onConnect(callback: ({channel, message}) => void)
     {
         this._eventBus.on('onConnect', callback);
     }
@@ -168,7 +168,7 @@ export default class ChannelManager
     /**
      * When a channel is disconnected
      */
-    onDisconnect(callback: ({channel: Channel, message: any}) => void)
+    onDisconnect(callback: ({channel, message}) => void)
     {
         this._eventBus.on('onDisconnect', callback);
     }
@@ -176,7 +176,7 @@ export default class ChannelManager
     /**
      * When a error on a channel
      */
-    onError(callback: ({channel: Channel, error: any}) => void)
+    onError(callback: ({channel, error}) => void)
     {
         this._eventBus.on('onError', callback);
     }
@@ -184,7 +184,7 @@ export default class ChannelManager
     /**
      * When a message on a channel
      */
-    onMessage(callback: ({channel: Channel, message: any}) => void)
+    onMessage(callback: ({channel, message}) => void)
     {
         this._eventBus.on('onMessage', callback);
     }

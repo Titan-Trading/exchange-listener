@@ -14,6 +14,7 @@ interface ServerToClientEvents {
 interface ClientToServerEvents {
     hello: () => void;
     message: () => void;
+    join_channel: (message: string) => void;
 }
 
 interface InterServerEvents {
@@ -95,6 +96,20 @@ export default class SocketIOClient
         }
 
         this._client.send(message);
+    }
+
+    /**
+     * Join a channel by name
+     * @param channelName 
+     * @returns 
+     */
+    joinChannel(channelName: any): void
+    {
+        if(!this._client) {
+            return;
+        }
+
+        this._client.emit('join_channel', channelName);
     }
 
     /**

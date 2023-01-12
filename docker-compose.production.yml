@@ -12,7 +12,6 @@ services:
     hostname: exchange-listener-1
     container_name: exchange-listener-1
     restart: always
-    tty: true
     env_file:
       - .one.env
     volumes:
@@ -30,8 +29,3 @@ networks:
 #Volumes
 volumes:
   app:
-    driver: local
-    driver_opts:
-      type: none
-      o: bind
-      device: ./
