@@ -140,7 +140,7 @@ export default class System
                         context.influxWrite.writePoint(point);
                     }*/
 
-                    console.log(exchange, symbol, data);
+                    // console.log(exchange, symbol, data);
 
                     // notify web and mobile clients (web socket)
                     context._socketServer.sendMessage({
@@ -232,7 +232,7 @@ export default class System
                         }
                     });
 
-                    console.log(exchange, symbol, data);
+                    // console.log(exchange, symbol, data);
                 });
 
                 /**
@@ -272,7 +272,7 @@ export default class System
                         }
                     });
 
-                    console.log(exchange, symbol, data);
+                    // console.log(exchange, symbol, data);
                 });
 
                 /**
@@ -315,7 +315,7 @@ export default class System
                         }
                     });
 
-                    console.log(exchange, accountId, data);
+                    // console.log(exchange, accountId, data);
                 });
 
                 /**
@@ -354,7 +354,7 @@ export default class System
                         }
                     });
 
-                    console.log(exchange, accountId, data);
+                    // console.log(exchange, accountId, data);
                 });
 
                 /**
